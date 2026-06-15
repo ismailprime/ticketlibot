@@ -28,24 +28,12 @@ const client = new Client({
 // ================= CONFIG =================
 
 const TOKEN = process.env.TOKEN;
-const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
 const MEMBER_ROLE = process.env.MEMBER_ROLE;
 
 // ================= DATA =================
 
 const giveaways = {};
-const spamMap = new Map();
 const activeTickets = new Map();
-
-// ================= BAD WORDS =================
-
-const BAD_WORDS = [
-  "amk","aq","orospu","oç","piç","sik","yarak","göt",
-  "fuck","shit","bitch","idiot","stupid"
-];
-
-const LINK_REGEX =
-  /(https?:\/\/|www\.|discord\.gg|discord\.com\/invite)/i;
 
 // ================= READY =================
 
@@ -66,100 +54,22 @@ client.on("guildMemberAdd", async (member) => {
   if (channel) {
     channel.send(`👋 Hoşgeldin <@${member.id}>`);
   }
-
-  const log = member.guild.channels.cache.get(LOG_CHANNEL_ID);
-  if (log) {
-    log.send(`📥 Yeni üye: <@${member.id}>`);
-  }
 });
 
-// ================= LOG SYSTEM =================
-
-client.on("messageDelete", async (message) => {
-
-  if (!message.guild) return;
-
-  const log = message.guild.channels.cache.get(LOG_CHANNEL_ID);
-
-  if (log) {
-    log.send(
-      `🗑️ Silindi: ${message.author?.tag || "unknown"} → ${message.content || "boş"}`
-    );
-  }
-});
-
-client.on("messageUpdate", async (oldM, newM) => {
-
-  if (!oldM.guild) return;
-  if (oldM.content === newM.content) return;
-
-  const log = oldM.guild.channels.cache.get(LOG_CHANNEL_ID);
-
-  if (log) {
-    log.send(
-      `✏️ Edit: ${oldM.author?.tag || "unknown"}\n` +
-      `Eski: ${oldM.content}\n` +
-      `Yeni: ${newM.content}`
-    );
-  }
-});
-
-// ================= MESSAGE SYSTEM =================
+// ================= MESSAGE COMMANDS =================
 
 client.on("messageCreate", async (message) => {
 
   if (message.author.bot || !message.guild) return;
 
-  const txt = message.content.toLowerCase();
-  const member = message.member;
-
   const isAdmin =
-    member.permissions.has(PermissionsBitField.Flags.Administrator);
-
-  // ================= SPAM =================
-
-  const now = Date.now();
-  const userId = message.author.id;
-
-  if (!spamMap.has(userId)) spamMap.set(userId, []);
-
-  const timestamps = spamMap.get(userId);
-  const recent = timestamps.filter(t => now - t < 5000);
-
-  recent.push(now);
-  spamMap.set(userId, recent);
-
-  if (recent.length >= 5) {
-    member.timeout(10 * 60 * 1000).catch(()=>{});
-    spamMap.set(userId, []);
-    return message.channel.send("🛡️ Spam → 10 dk mute");
-  }
-
-  // ================= LINK =================
-
-  if (LINK_REGEX.test(txt)) {
-    if (!isAdmin) {
-      await message.delete().catch(()=>{});
-      member.timeout(60 * 60 * 1000).catch(()=>{});
-      return message.channel.send("🔗 Link yasak → 1 saat mute");
-    }
-  }
-
-  // ================= SWEAR =================
-
-  if (BAD_WORDS.some(w => txt.includes(w))) {
-    if (!isAdmin) {
-      await message.delete().catch(()=>{});
-      member.timeout(5 * 60 * 1000).catch(()=>{});
-      return message.channel.send("⚠️ Küfür → 5 dk mute");
-    }
-  }
+    message.member.permissions.has(PermissionsBitField.Flags.Administrator);
 
   // ================= TICKET PANEL =================
 
   if (message.content === "!ticketpanel") {
 
-    if (!isAdmin) return message.reply("❌ Sadece adminler");
+    if (!isAdmin) return message.reply("❌ Sadece admin");
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -169,7 +79,7 @@ client.on("messageCreate", async (message) => {
     );
 
     return message.channel.send({
-      content: "🎫 Ticket sistemi",
+      content: "🎫 Ticket sistemi aktif",
       components: [row]
     });
   }
@@ -178,7 +88,7 @@ client.on("messageCreate", async (message) => {
 
   if (message.content.startsWith("!cekilis")) {
 
-    if (!isAdmin) return message.reply("❌ Sadece adminler");
+    if (!isAdmin) return message.reply("❌ Sadece admin");
 
     const args = message.content.split(" ");
     const time = args[1];
@@ -220,6 +130,22 @@ client.on("messageCreate", async (message) => {
 
     }, ms);
   }
+
+  // ================= IP COMMAND =================
+
+  if (message.content === "!ip") {
+
+    return message.channel.send(
+`**Java**
+Sürüm: 1.9 - 1.21.x
+Bağlantı Adresi: mc.skyforgenw.com.tr
+
+**Bedrock**
+Sürüm: Yakında
+Bağlantı Adresi: mc.skyforgenw.com.tr
+Port: 19132`
+    );
+  }
 });
 
 // ================= INTERACTIONS =================
@@ -231,7 +157,7 @@ client.on("interactionCreate", async (interaction) => {
   const isAdmin =
     interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
 
-  // ================= MENU =================
+  // ================= TICKET MENU =================
 
   if (interaction.customId === "ticket_open_menu") {
 
@@ -248,7 +174,7 @@ client.on("interactionCreate", async (interaction) => {
     );
 
     return interaction.reply({
-      content: "Kategori seç",
+      content: "📂 Kategori seç",
       components: [menu],
       ephemeral: true
     });
@@ -261,17 +187,17 @@ client.on("interactionCreate", async (interaction) => {
     const users = giveaways[interaction.message.id];
 
     if (!users)
-      return interaction.reply({ content: "bitti", ephemeral: true });
+      return interaction.reply({ content: "❌ Çekiliş bitti", ephemeral: true });
 
     if (users.includes(interaction.user.id))
-      return interaction.reply({ content: "zaten katıldın", ephemeral: true });
+      return interaction.reply({ content: "❌ Zaten katıldın", ephemeral: true });
 
     users.push(interaction.user.id);
 
-    return interaction.reply({ content: "katıldın", ephemeral: true });
+    return interaction.reply({ content: "🎉 Katıldın", ephemeral: true });
   }
 
-  // ================= TICKET LIMIT + CREATE =================
+  // ================= CREATE TICKET =================
 
   if (interaction.customId === "ticket_category") {
 
@@ -290,7 +216,7 @@ client.on("interactionCreate", async (interaction) => {
       type: 0,
       permissionOverwrites: [
         { id: interaction.guild.id, deny: ["ViewChannel"] },
-        { id: userId, allow: ["ViewChannel","SendMessages"] }
+        { id: userId, allow: ["ViewChannel","SendMessages","ReadMessageHistory"] }
       ]
     });
 
@@ -302,19 +228,19 @@ client.on("interactionCreate", async (interaction) => {
         new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId("ticket_close")
-            .setLabel("Kapat")
+            .setLabel("🔒 Kapat")
             .setStyle(ButtonStyle.Danger)
         )
       ]
     });
 
     return interaction.reply({
-      content: `ticket açıldı ${channel}`,
+      content: `✅ Ticket açıldı: ${channel}`,
       ephemeral: true
     });
   }
 
-  // ================= CLOSE =================
+  // ================= CLOSE TICKET =================
 
   if (interaction.customId === "ticket_close") {
 
@@ -323,7 +249,7 @@ client.on("interactionCreate", async (interaction) => {
 
     if (owner) activeTickets.delete(owner[0]);
 
-    await interaction.reply("kapatılıyor...");
+    await interaction.reply("🔒 Kapatılıyor...");
 
     setTimeout(() => {
       interaction.channel.delete().catch(()=>{});
