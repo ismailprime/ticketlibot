@@ -30,10 +30,9 @@ const client = new Client({
 const TOKEN = process.env.TOKEN;
 const MEMBER_ROLE = process.env.MEMBER_ROLE;
 
-// ================= OWNER ROLE =================
-
 const OWNER_ID = "1003708560728920165";
 const ADMIN_ROLE_ID = "1506368461964705924";
+const LOG_CHANNEL_ID = "LOG_CHANNEL_ID_BURAYA";
 
 // ================= DATA =================
 
@@ -41,6 +40,19 @@ const giveaways = {};
 const activeTickets = new Map();
 const invites = new Map();
 const userInvites = new Map();
+
+// ================= TIME =================
+
+function nowTime() {
+  return new Date().toLocaleString("tr-TR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+}
 
 // ================= READY =================
 
@@ -53,43 +65,66 @@ client.once("ready", async () => {
   });
 });
 
-// ================= INVITE + WELCOME =================
+// ================= PRO LOG SYSTEM =================
 
+// MESAJ SİLME
+client.on("messageDelete", async (message) => {
+  if (!message.guild) return;
+
+  const log = message.guild.channels.cache.get(LOG_CHANNEL_ID);
+  if (!log) return;
+
+  let executor = "Bilinmiyor";
+
+  try {
+    const audit = await message.guild.fetchAuditLogs({ limit: 1, type: 72 });
+    const entry = audit.entries.first();
+    if (entry) executor = entry.executor.tag;
+  } catch {}
+
+  log.send(
+    `🗑️ MESAJ SİLİNDİ\n` +
+    `👤 Yazan: ${message.author?.tag || "Bilinmiyor"}\n` +
+    `🧨 Silen: ${executor}\n` +
+    `💬: ${message.content || "boş"}\n` +
+    `⏰ ${nowTime()}`
+  );
+});
+
+// MESAJ EDİT
+client.on("messageUpdate", async (oldM, newM) => {
+  if (!oldM.guild) return;
+  if (oldM.content === newM.content) return;
+
+  const log = oldM.guild.channels.cache.get(LOG_CHANNEL_ID);
+  if (!log) return;
+
+  log.send(
+    `✏️ MESAJ DÜZENLENDİ\n` +
+    `👤 ${oldM.author?.tag || "Bilinmiyor"}\n` +
+    `📌 ÖNCE: ${oldM.content || "boş"}\n` +
+    `📌 SONRA: ${newM.content || "boş"}\n` +
+    `⏰ ${nowTime()}`
+  );
+});
+
+// ÜYE GİRİŞ
 client.on("guildMemberAdd", async (member) => {
 
   member.roles.add(MEMBER_ROLE).catch(()=>{});
 
-  // 👑 SADECE SEN
+  // SADECE SEN
   if (member.id === OWNER_ID) {
     member.roles.add(ADMIN_ROLE_ID).catch(()=>{});
   }
 
-  // invite system
-  const cached = invites.get(member.guild.id);
-  const newInv = await member.guild.invites.fetch().catch(()=>{});
-
-  const used = newInv.find(i => {
-    const old = cached?.get(i.code);
-    return old && i.uses > old.uses;
-  });
-
-  invites.set(member.guild.id, newInv);
-
-  if (used?.inviter?.id) {
-    const id = used.inviter.id;
-
-    if (!userInvites.has(id)) userInvites.set(id, 0);
-
-    userInvites.set(id, userInvites.get(id) + 1);
+  const log = member.guild.channels.cache.get(LOG_CHANNEL_ID);
+  if (log) {
+    log.send(`📥 GİRDİ: ${member.user.tag} | ${nowTime()}`);
   }
 
-  const channel = member.guild.channels.cache.find(
-    c => c.name === "💬│genel-sohbet"
-  );
-
-  if (channel) {
-    channel.send(`👋 Hoşgeldin <@${member.id}>`);
-  }
+  const channel = member.guild.channels.cache.find(c => c.name === "💬│genel-sohbet");
+  if (channel) channel.send(`👋 Hoşgeldin <@${member.id}>`);
 });
 
 // ================= MESSAGE =================
@@ -103,24 +138,40 @@ client.on("messageCreate", async (message) => {
 
   const msg = message.content.toLowerCase();
 
-  // ================= SELAM SISTEM =================
+  // ================= SELAM =================
 
-  if (
-    msg === "sa" ||
-    msg === "selam" ||
-    msg === "selamün aleyküm" ||
-    msg === "selamun aleyküm"
-  ) {
+  if (["sa","selam","selamün aleyküm","selamun aleyküm"].includes(msg)) {
     return message.channel.send(
-      `Aleyküm selam <@${message.author.id}>, hoşgeldin 👋 Biz de seni bekliyorduk.`
+      `Aleyküm selam <@${message.author.id}>, hoşgeldin 👋`
     );
+  }
+
+  // ================= IP =================
+
+  if (message.content === "!ip") {
+    return message.channel.send(
+`**Java**
+Sürüm: 1.9 - 1.21.x
+mc.skyforgenw.com.tr
+
+**Bedrock**
+Port: 19132
+mc.skyforgenw.com.tr`
+    );
+  }
+
+  // ================= -i INVITE =================
+
+  if (message.content === "-i") {
+    const count = userInvites.get(message.author.id) || 0;
+    return message.channel.send(`📨 Davet: **${count}**`);
   }
 
   // ================= TICKET PANEL =================
 
   if (message.content === "!ticketpanel") {
 
-    if (!isAdmin) return message.reply("❌ Sadece admin");
+    if (!isAdmin) return;
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -139,14 +190,13 @@ client.on("messageCreate", async (message) => {
 
   if (message.content.startsWith("!cekilis")) {
 
-    if (!isAdmin) return message.reply("❌ Sadece admin");
+    if (!isAdmin) return;
 
     const args = message.content.split(" ");
     const time = args[1];
     const prize = args.slice(2).join(" ");
 
     let ms = 0;
-
     if (time.endsWith("m")) ms = parseInt(time) * 60000;
     if (time.endsWith("h")) ms = parseInt(time) * 3600000;
     if (time.endsWith("d")) ms = parseInt(time) * 86400000;
@@ -181,31 +231,6 @@ client.on("messageCreate", async (message) => {
 
     }, ms);
   }
-
-  // ================= IP =================
-
-  if (message.content === "!ip") {
-
-    return message.channel.send(
-`**Java**
-Sürüm: 1.9 - 1.21.x
-Bağlantı: mc.skyforgenw.com.tr
-
-**Bedrock**
-Sürüm: Yakında
-Bağlantı: mc.skyforgenw.com.tr
-Port: 19132`
-    );
-  }
-
-  // ================= INVITE COUNT =================
-
-  if (message.content === "-i") {
-
-    const count = userInvites.get(message.author.id) || 0;
-
-    return message.channel.send(`📨 Davet sayın: **${count}**`);
-  }
 });
 
 // ================= INTERACTIONS =================
@@ -214,48 +239,43 @@ client.on("interactionCreate", async (interaction) => {
 
   if (!interaction.isButton() && !interaction.isStringSelectMenu()) return;
 
-  // ================= MENU =================
-
+  // MENU
   if (interaction.customId === "ticket_open_menu") {
 
-    const menu = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId("ticket_category")
-        .setPlaceholder("Kategori seç")
-        .addOptions(
-          { label: "Destek", value: "destek" },
-          { label: "Bug", value: "bug" },
-          { label: "Şikayet", value: "sikayet" },
-          { label: "Diğer", value: "diger" }
-        )
-    );
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId("ticket_category")
+      .setPlaceholder("Kategori seç")
+      .addOptions(
+        { label: "Destek", value: "destek" },
+        { label: "Bug", value: "bug" },
+        { label: "Şikayet", value: "sikayet" },
+        { label: "Diğer", value: "diger" }
+      );
 
     return interaction.reply({
-      content: "📂 Kategori seç",
-      components: [menu],
+      content: "Kategori seç",
+      components: [new ActionRowBuilder().addComponents(menu)],
       ephemeral: true
     });
   }
 
-  // ================= GIVEAWAY JOIN =================
-
+  // GIVEAWAY JOIN
   if (interaction.customId === "join_giveaway") {
 
     const users = giveaways[interaction.message.id];
 
     if (!users)
-      return interaction.reply({ content: "❌ bitti", ephemeral: true });
+      return interaction.reply({ content: "bitti", ephemeral: true });
 
     if (users.includes(interaction.user.id))
-      return interaction.reply({ content: "❌ zaten katıldın", ephemeral: true });
+      return interaction.reply({ content: "zaten katıldın", ephemeral: true });
 
     users.push(interaction.user.id);
 
-    return interaction.reply({ content: "🎉 katıldın", ephemeral: true });
+    return interaction.reply({ content: "katıldın", ephemeral: true });
   }
 
-  // ================= CREATE TICKET =================
-
+  // TICKET CREATE
   if (interaction.customId === "ticket_category") {
 
     const category = interaction.values[0];
@@ -273,7 +293,7 @@ client.on("interactionCreate", async (interaction) => {
       type: 0,
       permissionOverwrites: [
         { id: interaction.guild.id, deny: ["ViewChannel"] },
-        { id: userId, allow: ["ViewChannel","SendMessages","ReadMessageHistory"] }
+        { id: userId, allow: ["ViewChannel","SendMessages"] }
       ]
     });
 
@@ -297,8 +317,7 @@ client.on("interactionCreate", async (interaction) => {
     });
   }
 
-  // ================= CLOSE TICKET =================
-
+  // CLOSE
   if (interaction.customId === "ticket_close") {
 
     const owner = [...activeTickets.entries()]
