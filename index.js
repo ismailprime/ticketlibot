@@ -1,5 +1,3 @@
-require("dotenv").config();
-
 const {
   Client,
   GatewayIntentBits,
@@ -10,6 +8,8 @@ const {
   ButtonStyle,
   StringSelectMenuBuilder
 } = require("discord.js");
+
+// ================= CLIENT =================
 
 const client = new Client({
   intents: [
@@ -25,10 +25,11 @@ const client = new Client({
   ]
 });
 
-// ================= IDS =================
+// ================= CONFIG (RAILWAY VARS) =================
 
-const LOG_CHANNEL_ID = "1512629605830496257";
-const MEMBER_ROLE = "1506370448814899280";
+const TOKEN = process.env.TOKEN;
+const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
+const MEMBER_ROLE = process.env.MEMBER_ROLE;
 
 // ================= BAD WORDS =================
 
@@ -36,8 +37,6 @@ const BAD_WORDS = [
   "amk","aq","orospu","oç","piç","sik","yarak","göt",
   "fuck","shit","bitch","idiot","stupid"
 ];
-
-// ================= LINK =================
 
 const LINK_REGEX = /(https?:\/\/|www\.|discord\.gg|discord\.com\/invite)/i;
 
@@ -65,10 +64,9 @@ client.on("guildMemberAdd", async (member) => {
   if (log) log.send(`📥 Yeni üye: <@${member.id}>`);
 });
 
-// ================= LOG SYSTEM =================
+// ================= LOG =================
 
 client.on("messageDelete", async (message) => {
-
   if (!message.guild) return;
 
   const log = message.guild.channels.cache.get(LOG_CHANNEL_ID);
@@ -78,7 +76,6 @@ client.on("messageDelete", async (message) => {
 });
 
 client.on("messageUpdate", async (oldM, newM) => {
-
   if (!oldM.guild || oldM.content === newM.content) return;
 
   const log = oldM.guild.channels.cache.get(LOG_CHANNEL_ID);
@@ -87,7 +84,7 @@ client.on("messageUpdate", async (oldM, newM) => {
   }
 });
 
-// ================= MESSAGE =================
+// ================= MESSAGE SYSTEM =================
 
 client.on("messageCreate", async (message) => {
 
@@ -120,13 +117,9 @@ client.on("messageCreate", async (message) => {
     return message.channel.send("⚠️ Küfür → 5 dk mute");
   }
 
-  // ================= TICKET PANEL (ADMIN ONLY) =================
+  // ================= TICKET PANEL =================
 
   if (message.content === "!ticketpanel") {
-
-    const isAdmin = message.member.permissions.has(
-      PermissionsBitField.Flags.Administrator
-    );
 
     if (!isAdmin) {
       return message.reply("❌ Sadece adminler kullanabilir.");
@@ -152,7 +145,7 @@ client.on("interactionCreate", async (interaction) => {
 
   if (!interaction.isButton() && !interaction.isStringSelectMenu()) return;
 
-  // ================= OPEN MENU =================
+  // ================= MENU =================
 
   if (interaction.customId === "ticket_open_menu") {
 
@@ -238,4 +231,4 @@ client.on("interactionCreate", async (interaction) => {
 
 // ================= LOGIN =================
 
-client.login(process.env.TOKEN);
+client.login(TOKEN);
