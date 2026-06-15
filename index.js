@@ -32,7 +32,9 @@ const MEMBER_ROLE = process.env.MEMBER_ROLE;
 
 const OWNER_ID = "1003708560728920165";
 const ADMIN_ROLE_ID = "1506368461964705924";
-const LOG_CHANNEL_ID = "LOG_CHANNEL_ID_BURAYA";
+
+// ✅ LOG KANALI SABİT
+const LOG_CHANNEL_ID = "1512629605830496257";
 
 // ================= DATA =================
 
@@ -86,7 +88,7 @@ client.on("messageDelete", async (message) => {
     `🗑️ MESAJ SİLİNDİ\n` +
     `👤 Yazan: ${message.author?.tag || "Bilinmiyor"}\n` +
     `🧨 Silen: ${executor}\n` +
-    `💬: ${message.content || "boş"}\n` +
+    `💬 İçerik: ${message.content || "boş"}\n` +
     `⏰ ${nowTime()}`
   );
 });
@@ -101,26 +103,25 @@ client.on("messageUpdate", async (oldM, newM) => {
 
   log.send(
     `✏️ MESAJ DÜZENLENDİ\n` +
-    `👤 ${oldM.author?.tag || "Bilinmiyor"}\n` +
+    `👤 ${oldM.author?.tag || "Bilinmiyor"}\n\n` +
     `📌 ÖNCE: ${oldM.content || "boş"}\n` +
     `📌 SONRA: ${newM.content || "boş"}\n` +
     `⏰ ${nowTime()}`
   );
 });
 
-// ÜYE GİRİŞ
+// ÜYE GİRİŞ + ROL
 client.on("guildMemberAdd", async (member) => {
 
   member.roles.add(MEMBER_ROLE).catch(()=>{});
 
-  // SADECE SEN
   if (member.id === OWNER_ID) {
     member.roles.add(ADMIN_ROLE_ID).catch(()=>{});
   }
 
   const log = member.guild.channels.cache.get(LOG_CHANNEL_ID);
   if (log) {
-    log.send(`📥 GİRDİ: ${member.user.tag} | ${nowTime()}`);
+    log.send(`📥 GİRİŞ: ${member.user.tag} | ${nowTime()}`);
   }
 
   const channel = member.guild.channels.cache.find(c => c.name === "💬│genel-sohbet");
@@ -142,7 +143,7 @@ client.on("messageCreate", async (message) => {
 
   if (["sa","selam","selamün aleyküm","selamun aleyküm"].includes(msg)) {
     return message.channel.send(
-      `Aleyküm selam <@${message.author.id}>, hoşgeldin 👋`
+      `Aleyküm selam <@${message.author.id}>, hoşgeldin 👋 Biz de seni bekliyorduk.`
     );
   }
 
@@ -160,11 +161,11 @@ mc.skyforgenw.com.tr`
     );
   }
 
-  // ================= -i INVITE =================
+  // ================= -i =================
 
   if (message.content === "-i") {
     const count = userInvites.get(message.author.id) || 0;
-    return message.channel.send(`📨 Davet: **${count}**`);
+    return message.channel.send(`📨 Davet sayın: **${count}**`);
   }
 
   // ================= TICKET PANEL =================
@@ -293,7 +294,7 @@ client.on("interactionCreate", async (interaction) => {
       type: 0,
       permissionOverwrites: [
         { id: interaction.guild.id, deny: ["ViewChannel"] },
-        { id: userId, allow: ["ViewChannel","SendMessages"] }
+        { id: userId, allow: ["ViewChannel","SendMessages","ReadMessageHistory"] }
       ]
     });
 
