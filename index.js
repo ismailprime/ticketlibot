@@ -34,6 +34,8 @@ const MEMBER_ROLE = process.env.MEMBER_ROLE;
 // ================= DATA =================
 
 const giveaways = {};
+
+// 🔥 EKLENDİ
 const spamMap = new Map();
 const activeTickets = new Map();
 
@@ -43,6 +45,8 @@ const BAD_WORDS = [
   "amk","aq","orospu","oç","piç","sik","yarak","göt",
   "fuck","shit","bitch","idiot","stupid"
 ];
+
+// ================= LINK =================
 
 const LINK_REGEX =
   /(https?:\/\/|www\.|discord\.gg|discord\.com\/invite)/i;
@@ -57,30 +61,52 @@ client.once("ready", () => {
 
 client.on("guildMemberAdd", async (member) => {
 
-  member.roles.add(MEMBER_ROLE).catch(()=>{});
+  member.roles.add(MEMBER_ROLE).catch(() => {});
 
-  const ch = member.guild.channels.cache.find(
+  const channel = member.guild.channels.cache.find(
     c => c.name === "💬│genel-sohbet"
   );
 
-  if (ch) ch.send(`👋 Hoşgeldin <@${member.id}>`);
-});
+  if (channel) {
+    channel.send(`👋 Hoşgeldin <@${member.id}>`);
+  }
 
-// ================= LOG =================
+  const log = member.guild.channels.cache.get(LOG_CHANNEL_ID);
 
-client.on("messageDelete", async (m) => {
-  if (!m.guild) return;
-
-  const log = m.guild.channels.cache.get(LOG_CHANNEL_ID);
-  if (log) log.send(`🗑️ Silindi: ${m.author?.tag} → ${m.content || "boş"}`);
-});
-
-client.on("messageUpdate", async (o, n) => {
-  if (!o.guild || o.content === n.content) return;
-
-  const log = o.guild.channels.cache.get(LOG_CHANNEL_ID);
   if (log) {
-    log.send(`✏️ Edit: ${o.author?.tag}\n${o.content} → ${n.content}`);
+    log.send(`📥 Yeni üye: <@${member.id}>`);
+  }
+});
+
+// ================= LOG SYSTEM =================
+
+client.on("messageDelete", async (message) => {
+
+  if (!message.guild) return;
+
+  const log = message.guild.channels.cache.get(LOG_CHANNEL_ID);
+
+  if (log) {
+    log.send(
+      `🗑️ Silindi: ${message.author?.tag} → ${message.content || "boş"}`
+    );
+  }
+});
+
+client.on("messageUpdate", async (oldM, newM) => {
+
+  if (!oldM.guild) return;
+
+  if (oldM.content === newM.content) return;
+
+  const log = oldM.guild.channels.cache.get(LOG_CHANNEL_ID);
+
+  if (log) {
+    log.send(
+      `✏️ Edit: ${oldM.author?.tag}\n` +
+      `Eski: ${oldM.content}\n` +
+      `Yeni: ${newM.content}`
+    );
   }
 });
 
@@ -88,18 +114,19 @@ client.on("messageUpdate", async (o, n) => {
 
 client.on("messageCreate", async (message) => {
 
-  if (message.author.bot || !message.guild) return;
+  if (message.author.bot) return;
+  if (!message.guild) return;
 
   const txt = message.content.toLowerCase();
   const member = message.member;
-  const userId = message.author.id;
 
   const isAdmin =
     member.permissions.has(PermissionsBitField.Flags.Administrator);
 
-  // ================= SPAM SYSTEM =================
+  // ================= 🛡️ SPAM (EKLENDİ) =================
 
   const now = Date.now();
+  const userId = message.author.id;
 
   if (!spamMap.has(userId)) {
     spamMap.set(userId, []);
@@ -114,7 +141,7 @@ client.on("messageCreate", async (message) => {
 
   if (recent.length >= 5) {
 
-    member.timeout(10 * 60 * 1000).catch(()=>{});
+    member.timeout(10 * 60 * 1000).catch(() => {});
     spamMap.set(userId, []);
 
     return message.channel.send("🛡️ Spam → 10 dk mute");
@@ -123,29 +150,32 @@ client.on("messageCreate", async (message) => {
   // ================= LINK =================
 
   if (LINK_REGEX.test(txt)) {
-    if (!isAdmin) {
-      await message.delete().catch(()=>{});
-      member.timeout(60 * 60 * 1000).catch(()=>{});
-      return message.channel.send("🔗 Link → 1 saat mute");
-    }
+
+    if (isAdmin) return;
+
+    await message.delete().catch(() => {});
+    member.timeout(60 * 60 * 1000).catch(() => {});
+
+    return message.channel.send("🔗 Link yasak → 1 saat mute");
   }
 
   // ================= SWEAR =================
 
   if (BAD_WORDS.some(w => txt.includes(w))) {
-    if (!isAdmin) {
-      await message.delete().catch(()=>{});
-      member.timeout(5 * 60 * 1000).catch(()=>{});
-      return message.channel.send("⚠️ Küfür → 5 dk mute");
-    }
+
+    if (isAdmin) return;
+
+    await message.delete().catch(() => {});
+    member.timeout(5 * 60 * 1000).catch(() => {});
+
+    return message.channel.send("⚠️ Küfür → 5 dk mute");
   }
 
   // ================= TICKET PANEL =================
 
   if (message.content === "!ticketpanel") {
 
-    if (!isAdmin)
-      return message.reply("❌ Sadece admin");
+    if (!isAdmin) return message.reply("❌ Sadece adminler kullanabilir.");
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -155,7 +185,7 @@ client.on("messageCreate", async (message) => {
     );
 
     return message.channel.send({
-      content: "🎫 Ticket sistemi",
+      content: "🎫 Ticket sistemi aktif",
       components: [row]
     });
   }
@@ -173,25 +203,24 @@ client.on("interactionCreate", async (interaction) => {
       PermissionsBitField.Flags.Administrator
     );
 
-  // ================= PANEL =================
+  // ================= OPEN MENU =================
 
   if (interaction.customId === "ticket_open_menu") {
 
     const menu = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId("ticket_category")
-        .setPlaceholder("Kategori seç")
+        .setPlaceholder("📂 Kategori seç")
         .addOptions(
-          { label: "Destek", value: "destek" },
-          { label: "Bug", value: "bug" },
-          { label: "Şikayet", value: "sikayet" },
-          { label: "Diğer", value: "diger" },
-          { label: "Ödeme / Muhasebe", value: "muhasebe", emoji: "💰" }
+          { label: "Destek", value: "destek", emoji: "🛠️" },
+          { label: "Bug", value: "bug", emoji: "🐞" },
+          { label: "Şikayet", value: "sikayet", emoji: "⚠️" },
+          { label: "Diğer", value: "diger", emoji: "📩" }
         )
     );
 
     return interaction.reply({
-      content: "Kategori seç",
+      content: "📂 Kategori seç",
       components: [menu],
       ephemeral: true
     });
@@ -201,28 +230,29 @@ client.on("interactionCreate", async (interaction) => {
 
   if (interaction.customId === "join_giveaway") {
 
-    const list = giveaways[interaction.message.id];
+    const users = giveaways[interaction.message.id];
 
-    if (!list)
-      return interaction.reply({ content: "bitti", ephemeral: true });
+    if (!users) {
+      return interaction.reply({ content: "❌ Çekiliş bitti.", ephemeral: true });
+    }
 
-    if (list.includes(interaction.user.id))
-      return interaction.reply({ content: "zaten katıldın", ephemeral: true });
+    if (users.includes(interaction.user.id)) {
+      return interaction.reply({ content: "❌ Zaten katıldın.", ephemeral: true });
+    }
 
-    list.push(interaction.user.id);
+    users.push(interaction.user.id);
 
-    return interaction.reply({ content: "katıldın", ephemeral: true });
+    return interaction.reply({ content: "🎉 Çekilişe katıldın!", ephemeral: true });
   }
 
-  // ================= TICKET CREATE =================
+  // ================= 🎫 TICKET CREATE (LIMIT EKLİ) =================
 
   if (interaction.customId === "ticket_category") {
 
     const category = interaction.values[0];
     const userId = interaction.user.id;
 
-    // ================= 1 TICKET LIMIT =================
-
+    // 🔥 1 TICKET LIMIT
     if (activeTickets.has(userId)) {
       return interaction.reply({
         content: "❌ Zaten açık ticketin var!",
@@ -230,78 +260,46 @@ client.on("interactionCreate", async (interaction) => {
       });
     }
 
-    let perms = [
-      {
-        id: interaction.guild.id,
-        deny: ["ViewChannel"]
-      },
-      {
-        id: userId,
-        allow: ["ViewChannel","SendMessages","ReadMessageHistory"]
-      }
-    ];
-
-    // NORMAL SUPPORT
-    if (category !== "muhasebe") {
-
-      perms.push(
-        {
-          id: "1506368461964705924",
-          allow: ["ViewChannel","SendMessages"]
-        },
-        {
-          id: "1506367703810707456",
-          allow: ["ViewChannel","SendMessages"]
-        }
-      );
-    }
-
-    // MUHASEBE (SADECE 2 KİŞİ)
-    if (category === "muhasebe") {
-
-      perms.push(
-        {
-          id: "1221109335409688647",
-          allow: ["ViewChannel","SendMessages"]
-        },
-        {
-          id: "701120598922756177",
-          allow: ["ViewChannel","SendMessages"]
-        }
-      );
-    }
-
-    const ch = await interaction.guild.channels.create({
+    const channel = await interaction.guild.channels.create({
       name: `ticket-${category}-${interaction.user.username}`,
       type: 0,
-      permissionOverwrites: perms
+      permissionOverwrites: [
+        {
+          id: interaction.guild.id,
+          deny: ["ViewChannel"]
+        },
+        {
+          id: userId,
+          allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"]
+        }
+      ]
     });
 
-    activeTickets.set(userId, ch.id);
+    // kayıt
+    activeTickets.set(userId, channel.id);
 
-    await ch.send({
+    await channel.send({
       content:
-        category === "muhasebe"
-          ? `<@1221109335409688647> <@701120598922756177>`
-          : `<@&1506368461964705924> <@&1506367703810707456>`,
+        `<@&1506368461964705924> <@&1506367703810707456>\n\n` +
+        `🎫 Ticket Açıldı\n📂 ${category}`,
 
       components: [
         new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId("ticket_close")
-            .setLabel("🔒 Kapat")
+            .setLabel("🔒 Ticket Kapat")
             .setStyle(ButtonStyle.Danger)
         )
       ]
     });
 
     return interaction.reply({
-      content: `ticket açıldı ${ch}`,
+      content: `✅ Ticket açıldı: ${channel}`,
       ephemeral: true
     });
   }
 
-  // ================= CLOSE =================
+  // ================= CLOSE TICKET =================
 
   if (interaction.customId === "ticket_close") {
 
@@ -312,10 +310,10 @@ client.on("interactionCreate", async (interaction) => {
       activeTickets.delete(owner[0]);
     }
 
-    await interaction.reply("kapatılıyor...");
+    await interaction.reply("🔒 Ticket kapatılıyor...");
 
     setTimeout(() => {
-      interaction.channel.delete().catch(()=>{});
+      interaction.channel.delete().catch(() => {});
     }, 2000);
   }
 });
