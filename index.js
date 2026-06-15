@@ -30,12 +30,15 @@ const client = new Client({
 const TOKEN = process.env.TOKEN;
 const MEMBER_ROLE = process.env.MEMBER_ROLE;
 
+// ================= OWNER ROLE =================
+
+const OWNER_ID = "1003708560728920165";
+const ADMIN_ROLE_ID = "1506368461964705924";
+
 // ================= DATA =================
 
 const giveaways = {};
 const activeTickets = new Map();
-
-// INVITE SYSTEM
 const invites = new Map();
 const userInvites = new Map();
 
@@ -50,12 +53,18 @@ client.once("ready", async () => {
   });
 });
 
-// ================= INVITE TRACK =================
+// ================= INVITE + WELCOME =================
 
 client.on("guildMemberAdd", async (member) => {
 
   member.roles.add(MEMBER_ROLE).catch(()=>{});
 
+  // 👑 SADECE SEN
+  if (member.id === OWNER_ID) {
+    member.roles.add(ADMIN_ROLE_ID).catch(()=>{});
+  }
+
+  // invite system
   const cached = invites.get(member.guild.id);
   const newInv = await member.guild.invites.fetch().catch(()=>{});
 
@@ -92,6 +101,21 @@ client.on("messageCreate", async (message) => {
   const isAdmin =
     message.member.permissions.has(PermissionsBitField.Flags.Administrator);
 
+  const msg = message.content.toLowerCase();
+
+  // ================= SELAM SISTEM =================
+
+  if (
+    msg === "sa" ||
+    msg === "selam" ||
+    msg === "selamün aleyküm" ||
+    msg === "selamun aleyküm"
+  ) {
+    return message.channel.send(
+      `Aleyküm selam <@${message.author.id}>, hoşgeldin 👋 Biz de seni bekliyorduk.`
+    );
+  }
+
   // ================= TICKET PANEL =================
 
   if (message.content === "!ticketpanel") {
@@ -106,7 +130,7 @@ client.on("messageCreate", async (message) => {
     );
 
     return message.channel.send({
-      content: "🎫 Ticket sistemi",
+      content: "🎫 Ticket sistemi aktif",
       components: [row]
     });
   }
@@ -134,16 +158,16 @@ client.on("messageCreate", async (message) => {
         .setStyle(ButtonStyle.Success)
     );
 
-    const msg = await message.channel.send({
+    const msgGiveaway = await message.channel.send({
       content: `🎉 ÇEKİLİŞ\n🎁 ${prize}\n⏰ ${time}`,
       components: [row]
     });
 
-    giveaways[msg.id] = [];
+    giveaways[msgGiveaway.id] = [];
 
     setTimeout(() => {
 
-      const users = giveaways[msg.id];
+      const users = giveaways[msgGiveaway.id];
 
       if (!users || users.length === 0)
         return message.channel.send("❌ kimse katılmadı");
@@ -153,7 +177,7 @@ client.on("messageCreate", async (message) => {
 
       message.channel.send(`🏆 Kazanan: <@${winner}>`);
 
-      delete giveaways[msg.id];
+      delete giveaways[msgGiveaway.id];
 
     }, ms);
   }
@@ -190,7 +214,7 @@ client.on("interactionCreate", async (interaction) => {
 
   if (!interaction.isButton() && !interaction.isStringSelectMenu()) return;
 
-  // ================= TICKET MENU =================
+  // ================= MENU =================
 
   if (interaction.customId === "ticket_open_menu") {
 
@@ -249,7 +273,7 @@ client.on("interactionCreate", async (interaction) => {
       type: 0,
       permissionOverwrites: [
         { id: interaction.guild.id, deny: ["ViewChannel"] },
-        { id: userId, allow: ["ViewChannel","SendMessages"] }
+        { id: userId, allow: ["ViewChannel","SendMessages","ReadMessageHistory"] }
       ]
     });
 
