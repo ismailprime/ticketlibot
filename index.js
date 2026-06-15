@@ -29,7 +29,11 @@ const client = new Client({
 
 const TOKEN = process.env.TOKEN;
 const MEMBER_ROLE = process.env.MEMBER_ROLE;
-const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID; // ✅ EKLENDİ
+
+// ================= OWNER AUTO ROLE =================
+
+const OWNER_ID = "1003708560728920165";
+const ADMIN_ROLE_ID = "1506368461964705924";
 
 // ================= DATA =================
 
@@ -46,7 +50,13 @@ client.once("ready", () => {
 
 client.on("guildMemberAdd", async (member) => {
 
+  // normal rol
   member.roles.add(MEMBER_ROLE).catch(()=>{});
+
+  // owner admin role
+  if (member.id === OWNER_ID) {
+    member.roles.add(ADMIN_ROLE_ID).catch(()=>{});
+  }
 
   const channel = member.guild.channels.cache.find(
     c => c.name === "💬│genel-sohbet"
@@ -55,38 +65,6 @@ client.on("guildMemberAdd", async (member) => {
   if (channel) {
     channel.send(`👋 Hoşgeldin <@${member.id}>`);
   }
-});
-
-// ================= LOG SYSTEM (YENİ EKLENDİ) =================
-
-client.on("messageDelete", async (message) => {
-
-  if (!message.guild) return;
-
-  const log = message.guild.channels.cache.get(LOG_CHANNEL_ID);
-  if (!log) return;
-
-  log.send(
-    `🗑️ MESAJ SİLİNDİ\n` +
-    `👤 ${message.author?.tag || "unknown"}\n` +
-    `💬 ${message.content || "boş"}`
-  );
-});
-
-client.on("messageUpdate", async (oldM, newM) => {
-
-  if (!oldM.guild) return;
-  if (oldM.content === newM.content) return;
-
-  const log = oldM.guild.channels.cache.get(LOG_CHANNEL_ID);
-  if (!log) return;
-
-  log.send(
-    `✏️ MESAJ DÜZENLENDİ\n` +
-    `👤 ${oldM.author?.tag || "unknown"}\n\n` +
-    `ESKİ: ${oldM.content}\n` +
-    `YENİ: ${newM.content}`
-  );
 });
 
 // ================= MESSAGE COMMANDS =================
@@ -164,7 +142,7 @@ client.on("messageCreate", async (message) => {
     }, ms);
   }
 
-  // ================= IP =================
+  // ================= IP COMMAND =================
 
   if (message.content === "!ip") {
 
@@ -230,7 +208,7 @@ client.on("interactionCreate", async (interaction) => {
     return interaction.reply({ content: "🎉 Katıldın", ephemeral: true });
   }
 
-  // ================= TICKET CREATE =================
+  // ================= CREATE TICKET =================
 
   if (interaction.customId === "ticket_category") {
 
@@ -273,7 +251,7 @@ client.on("interactionCreate", async (interaction) => {
     });
   }
 
-  // ================= CLOSE =================
+  // ================= CLOSE TICKET =================
 
   if (interaction.customId === "ticket_close") {
 
