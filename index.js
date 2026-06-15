@@ -30,32 +30,48 @@ const client = new Client({
 const TOKEN = process.env.TOKEN;
 const MEMBER_ROLE = process.env.MEMBER_ROLE;
 
-// ================= OWNER AUTO ROLE =================
-
-const OWNER_ID = "1003708560728920165";
-const ADMIN_ROLE_ID = "1506368461964705924";
-
 // ================= DATA =================
 
 const giveaways = {};
 const activeTickets = new Map();
 
+// INVITE SYSTEM
+const invites = new Map();
+const userInvites = new Map();
+
 // ================= READY =================
 
-client.once("ready", () => {
+client.once("ready", async () => {
   console.log(`${client.user.tag} aktif!`);
+
+  client.guilds.cache.forEach(async (guild) => {
+    const inv = await guild.invites.fetch().catch(()=>{});
+    invites.set(guild.id, inv);
+  });
 });
 
-// ================= WELCOME =================
+// ================= INVITE TRACK =================
 
 client.on("guildMemberAdd", async (member) => {
 
-  // normal rol
   member.roles.add(MEMBER_ROLE).catch(()=>{});
 
-  // owner admin role
-  if (member.id === OWNER_ID) {
-    member.roles.add(ADMIN_ROLE_ID).catch(()=>{});
+  const cached = invites.get(member.guild.id);
+  const newInv = await member.guild.invites.fetch().catch(()=>{});
+
+  const used = newInv.find(i => {
+    const old = cached?.get(i.code);
+    return old && i.uses > old.uses;
+  });
+
+  invites.set(member.guild.id, newInv);
+
+  if (used?.inviter?.id) {
+    const id = used.inviter.id;
+
+    if (!userInvites.has(id)) userInvites.set(id, 0);
+
+    userInvites.set(id, userInvites.get(id) + 1);
   }
 
   const channel = member.guild.channels.cache.find(
@@ -67,7 +83,7 @@ client.on("guildMemberAdd", async (member) => {
   }
 });
 
-// ================= MESSAGE COMMANDS =================
+// ================= MESSAGE =================
 
 client.on("messageCreate", async (message) => {
 
@@ -90,7 +106,7 @@ client.on("messageCreate", async (message) => {
     );
 
     return message.channel.send({
-      content: "🎫 Ticket sistemi aktif",
+      content: "🎫 Ticket sistemi",
       components: [row]
     });
   }
@@ -142,20 +158,29 @@ client.on("messageCreate", async (message) => {
     }, ms);
   }
 
-  // ================= IP COMMAND =================
+  // ================= IP =================
 
   if (message.content === "!ip") {
 
     return message.channel.send(
 `**Java**
 Sürüm: 1.9 - 1.21.x
-Bağlantı Adresi: mc.skyforgenw.com.tr
+Bağlantı: mc.skyforgenw.com.tr
 
 **Bedrock**
 Sürüm: Yakında
-Bağlantı Adresi: mc.skyforgenw.com.tr
+Bağlantı: mc.skyforgenw.com.tr
 Port: 19132`
     );
+  }
+
+  // ================= INVITE COUNT =================
+
+  if (message.content === "-i") {
+
+    const count = userInvites.get(message.author.id) || 0;
+
+    return message.channel.send(`📨 Davet sayın: **${count}**`);
   }
 });
 
@@ -164,9 +189,6 @@ Port: 19132`
 client.on("interactionCreate", async (interaction) => {
 
   if (!interaction.isButton() && !interaction.isStringSelectMenu()) return;
-
-  const isAdmin =
-    interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
 
   // ================= TICKET MENU =================
 
@@ -198,14 +220,14 @@ client.on("interactionCreate", async (interaction) => {
     const users = giveaways[interaction.message.id];
 
     if (!users)
-      return interaction.reply({ content: "❌ Çekiliş bitti", ephemeral: true });
+      return interaction.reply({ content: "❌ bitti", ephemeral: true });
 
     if (users.includes(interaction.user.id))
-      return interaction.reply({ content: "❌ Zaten katıldın", ephemeral: true });
+      return interaction.reply({ content: "❌ zaten katıldın", ephemeral: true });
 
     users.push(interaction.user.id);
 
-    return interaction.reply({ content: "🎉 Katıldın", ephemeral: true });
+    return interaction.reply({ content: "🎉 katıldın", ephemeral: true });
   }
 
   // ================= CREATE TICKET =================
@@ -217,7 +239,7 @@ client.on("interactionCreate", async (interaction) => {
 
     if (activeTickets.has(userId)) {
       return interaction.reply({
-        content: "❌ Zaten açık ticketin var!",
+        content: "❌ Zaten ticketin var",
         ephemeral: true
       });
     }
@@ -227,7 +249,7 @@ client.on("interactionCreate", async (interaction) => {
       type: 0,
       permissionOverwrites: [
         { id: interaction.guild.id, deny: ["ViewChannel"] },
-        { id: userId, allow: ["ViewChannel","SendMessages","ReadMessageHistory"] }
+        { id: userId, allow: ["ViewChannel","SendMessages"] }
       ]
     });
 
@@ -239,14 +261,14 @@ client.on("interactionCreate", async (interaction) => {
         new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId("ticket_close")
-            .setLabel("🔒 Kapat")
+            .setLabel("Kapat")
             .setStyle(ButtonStyle.Danger)
         )
       ]
     });
 
     return interaction.reply({
-      content: `✅ Ticket açıldı: ${channel}`,
+      content: `ticket açıldı ${channel}`,
       ephemeral: true
     });
   }
@@ -260,7 +282,7 @@ client.on("interactionCreate", async (interaction) => {
 
     if (owner) activeTickets.delete(owner[0]);
 
-    await interaction.reply("🔒 Kapatılıyor...");
+    await interaction.reply("kapatılıyor...");
 
     setTimeout(() => {
       interaction.channel.delete().catch(()=>{});
