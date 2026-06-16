@@ -41,17 +41,19 @@ const giveaways = {};
 const activeTickets = new Map();
 const invites = new Map();
 const userInvites = new Map();
-
-// INVITE FIX CACHE
-const guildInvitesCache = new Map();
-
-// DROP SYSTEM
 let dropActive = false;
 
 // ================= TIME =================
 
 function nowTime() {
-  return new Date().toLocaleString("tr-TR");
+  return new Date().toLocaleString("tr-TR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
 }
 
 // ================= READY =================
@@ -61,19 +63,13 @@ client.once("ready", async () => {
 
   client.guilds.cache.forEach(async (guild) => {
     const inv = await guild.invites.fetch().catch(() => {});
-    guildInvitesCache.set(guild.id, inv);
+    invites.set(guild.id, inv);
   });
-
-  setInterval(async () => {
-    client.guilds.cache.forEach(async (guild) => {
-      const inv = await guild.invites.fetch().catch(() => {});
-      guildInvitesCache.set(guild.id, inv);
-    });
-  }, 30000);
 });
 
 // ================= LOG SYSTEM =================
 
+// MESAJ SİLME
 client.on("messageDelete", async (message) => {
   if (!message.guild) return;
 
@@ -88,15 +84,16 @@ client.on("messageDelete", async (message) => {
     if (entry) executor = entry.executor.tag;
   } catch {}
 
-  log.send(
-    `🗑️ MESAJ SİLİNDİ\n` +
-    `👤 Yazan: ${message.author?.tag || "Bilinmiyor"}\n` +
-    `🧨 Silen: ${executor}\n` +
-    `💬 İçerik: ${message.content || "boş"}\n` +
-    `⏰ ${nowTime()}`
-  );
+  log.send(`
+🗑️ MESAJ SİLİNDİ
+👤 Yazan: ${message.author?.tag || "Bilinmiyor"}
+🧨 Silen: ${executor}
+💬 İçerik: ${message.content || "boş"}
+⏰ ${nowTime()}
+  `);
 });
 
+// MESAJ EDİT
 client.on("messageUpdate", async (oldM, newM) => {
   if (!oldM.guild) return;
   if (oldM.content === newM.content) return;
@@ -104,41 +101,29 @@ client.on("messageUpdate", async (oldM, newM) => {
   const log = oldM.guild.channels.cache.get(LOG_CHANNEL_ID);
   if (!log) return;
 
-  log.send(
-    `✏️ MESAJ DÜZENLENDİ\n` +
-    `👤 ${oldM.author?.tag || "Bilinmiyor"}\n` +
-    `📌 ÖNCE: ${oldM.content}\n` +
-    `📌 SONRA: ${newM.content}\n` +
-    `⏰ ${nowTime()}`
-  );
+  log.send(`
+✏️ MESAJ DÜZENLENDİ
+👤 ${oldM.author?.tag || "Bilinmiyor"}
+📌 ÖNCE: ${oldM.content || "boş"}
+📌 SONRA: ${newM.content || "boş"}
+⏰ ${nowTime()}
+  `);
 });
 
-// ================= INVITE FIX =================
+// ================= JOIN =================
 
 client.on("guildMemberAdd", async (member) => {
 
   member.roles.add(MEMBER_ROLE).catch(() => {});
 
-  // INVITE TRACKING
-  try {
-    const newInvites = await member.guild.invites.fetch();
-    const oldInvites = guildInvitesCache.get(member.guild.id);
-
-    const usedInvite = newInvites.find(i =>
-      (oldInvites?.get(i.code)?.uses || 0) < i.uses
-    );
-
-    guildInvitesCache.set(member.guild.id, newInvites);
-
-    if (usedInvite && usedInvite.inviter) {
-      const id = usedInvite.inviter.id;
-      const current = userInvites.get(id) || 0;
-      userInvites.set(id, current + 1);
-    }
-  } catch {}
+  if (member.id === OWNER_ID) {
+    member.roles.add(ADMIN_ROLE_ID).catch(() => {});
+  }
 
   const log = member.guild.channels.cache.get(LOG_CHANNEL_ID);
-  if (log) log.send(`📥 GİRİŞ: ${member.user.tag} | ${nowTime()}`);
+  if (log) {
+    log.send(`📥 GİRİŞ: ${member.user.tag} | ${nowTime()}`);
+  }
 
   const channel = member.guild.channels.cache.find(c => c.name === "💬│genel-sohbet");
   if (channel) channel.send(`👋 Hoşgeldin <@${member.id}>`);
@@ -155,22 +140,35 @@ client.on("messageCreate", async (message) => {
 
   const msg = message.content.toLowerCase();
 
-  if (["sa","selam","selamün aleyküm"].includes(msg)) {
-    return message.channel.send(`Aleyküm selam <@${message.author.id}> 👋`);
+  // SELAM
+  if (["sa","selam","selamün aleyküm","selamun aleyküm"].includes(msg)) {
+    return message.channel.send(
+      `Aleyküm selam <@${message.author.id}>, hoşgeldin 👋`
+    );
   }
 
+  // IP
   if (message.content === "!ip") {
-    return message.channel.send(`mc.skyforgenw.com.tr`);
+    return message.channel.send(`
+Java
+Sürüm: 1.9 - 1.21.x
+mc.skyforgenw.com.tr
+
+Bedrock
+Port: 19132
+mc.skyforgenw.com.tr
+    `);
   }
 
+  // -i
   if (message.content === "-i") {
     const count = userInvites.get(message.author.id) || 0;
     return message.channel.send(`📨 Davet sayın: **${count}**`);
   }
 
-  // ================= TICKET =================
-
+  // TICKET PANEL
   if (message.content === "!ticketpanel") {
+
     if (!isAdmin) return;
 
     const row = new ActionRowBuilder().addComponents(
@@ -186,8 +184,7 @@ client.on("messageCreate", async (message) => {
     });
   }
 
-  // ================= GIVEAWAY =================
-
+  // GIVEAWAY
   if (message.content.startsWith("!cekilis")) {
 
     if (!isAdmin) return;
@@ -231,33 +228,42 @@ client.on("messageCreate", async (message) => {
 
     }, ms);
   }
-
-  // ================= DROP =================
-
-  if (message.content.startsWith("!drop")) {
-
-    if (!isAdmin) return;
-
-    if (dropActive) return message.reply("❌ Zaten drop var!");
-
-    const prize = message.content.split(" ").slice(1).join(" ");
-    if (!prize) return message.reply("Ödül yaz!");
-
-    dropActive = true;
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("drop_claim")
-        .setLabel("🎁 Ödülü Kap!")
-        .setStyle(ButtonStyle.Success)
-    );
-
-    message.channel.send({
-      content: `🎉 DROP\n🎁 ${prize}`,
-      components: [row]
-    });
-  }
 });
+
+
+// ================= DROP =================
+
+if (message.content.startsWith("!drop")) {
+
+  const isAdmin =
+    message.member.permissions.has(PermissionsBitField.Flags.Administrator);
+
+  if (!isAdmin) return;
+
+  if (dropActive) {
+    return message.reply("❌ Zaten aktif drop var!");
+  }
+
+  const prize = message.content.split(" ").slice(1).join(" ");
+
+  if (!prize) {
+    return message.reply("❌ Örnek: !drop 7 günlük VIP");
+  }
+
+  dropActive = true;
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("drop_claim")
+      .setLabel("🎁 Kap!")
+      .setStyle(ButtonStyle.Success)
+  );
+
+  return message.channel.send({
+    content: `🎉 DROP BAŞLADI!\n🎁 Ödül: ${prize}`,
+    components: [row]
+  });
+}
 
 // ================= INTERACTIONS =================
 
@@ -265,25 +271,7 @@ client.on("interactionCreate", async (interaction) => {
 
   if (!interaction.isButton() && !interaction.isStringSelectMenu()) return;
 
-  if (interaction.customId === "drop_claim") {
-
-    if (!dropActive)
-      return interaction.reply({ content: "Bitti", ephemeral: true });
-
-    dropActive = false;
-
-    const user = interaction.user;
-
-    await interaction.update({
-      content: `🏆 Kazanan: <@${user.id}>`,
-      components: []
-    });
-
-    return interaction.channel.send(
-      `🎊 <@${user.id}> kazandın! Ticket aç.`
-    );
-  }
-
+  // TICKET MENU
   if (interaction.customId === "ticket_open_menu") {
 
     const menu = new StringSelectMenuBuilder()
@@ -291,15 +279,19 @@ client.on("interactionCreate", async (interaction) => {
       .setPlaceholder("Kategori seç")
       .addOptions(
         { label: "Destek", value: "destek" },
-        { label: "Bug", value: "bug" }
+        { label: "Bug", value: "bug" },
+        { label: "Şikayet", value: "sikayet" },
+        { label: "Diğer", value: "diger" }
       );
 
     return interaction.reply({
+      content: "Kategori seç",
       components: [new ActionRowBuilder().addComponents(menu)],
       ephemeral: true
     });
   }
 
+  // GIVEAWAY JOIN
   if (interaction.customId === "join_giveaway") {
 
     const users = giveaways[interaction.message.id];
@@ -315,7 +307,88 @@ client.on("interactionCreate", async (interaction) => {
     return interaction.reply({ content: "katıldın", ephemeral: true });
   }
 
+  // TICKET CREATE
+  if (interaction.customId === "ticket_category") {
+
+    const category = interaction.values[0];
+    const userId = interaction.user.id;
+
+    if (activeTickets.has(userId)) {
+      return interaction.reply({
+        content: "❌ Zaten ticketin var",
+        ephemeral: true
+      });
+    }
+
+    const channel = await interaction.guild.channels.create({
+      name: `ticket-${category}-${interaction.user.username}`,
+      type: 0,
+      permissionOverwrites: [
+        { id: interaction.guild.id, deny: ["ViewChannel"] },
+        { id: userId, allow: ["ViewChannel","SendMessages","ReadMessageHistory"] }
+      ]
+    });
+
+    activeTickets.set(userId, channel.id);
+
+    await channel.send({
+      content: `🎫 Ticket Açıldı\n📂 ${category}`,
+      components: [
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId("ticket_close")
+            .setLabel("Kapat")
+            .setStyle(ButtonStyle.Danger)
+        )
+      ]
+    });
+
+    return interaction.reply({
+      content: `ticket açıldı ${channel}`,
+      ephemeral: true
+    });
+  }
+
+  // CLOSE
+  if (interaction.customId === "ticket_close") {
+
+    const owner = [...activeTickets.entries()]
+      .find(x => x[1] === interaction.channel.id);
+
+    if (owner) activeTickets.delete(owner[0]);
+
+    await interaction.reply("kapatılıyor...");
+
+    setTimeout(() => {
+      interaction.channel.delete().catch(() => {});
+    }, 2000);
+  }
 });
+
+// ================= DROP CLAIM =================
+
+if (interaction.customId === "drop_claim") {
+
+  if (!dropActive) {
+    return interaction.reply({
+      content: "❌ Drop bitmiş!",
+      ephemeral: true
+    });
+  }
+
+  dropActive = false;
+
+  const user = interaction.user;
+
+  await interaction.update({
+    content: `🏆 Kazanan: <@${user.id}>`,
+    components: []
+  });
+
+  return interaction.channel.send(
+    `🎊 <@${user.id}> ödülü kazandı! Lütfen ticket aç.`
+  );
+}
 
 // ================= LOGIN =================
 
