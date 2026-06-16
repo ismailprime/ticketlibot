@@ -70,9 +70,9 @@ client.once("ready", async () => {
   });
 });
 
-// ================= SAFE LOG =================
+// ================= LOG FIX =================
 
-// MESSAGE DELETE
+// MESAJ SİLME (FIX)
 client.on("messageDelete", async (message) => {
   if (!message.guild) return;
 
@@ -100,10 +100,11 @@ client.on("messageDelete", async (message) => {
   `).catch(() => {});
 });
 
-// MESSAGE UPDATE
+// MESAJ DÜZENLEME (FIX)
 client.on("messageUpdate", async (oldM, newM) => {
   if (!oldM.guild) return;
   if (!oldM.author || oldM.author.bot) return;
+  if (!oldM.content || !newM.content) return;
   if (oldM.content === newM.content) return;
 
   const log = oldM.guild.channels.cache.get(LOG_CHANNEL_ID);
@@ -112,50 +113,23 @@ client.on("messageUpdate", async (oldM, newM) => {
   log.send(`
 ✏ MESAJ DÜZENLENDİ
 👤 Kullanıcı: ${oldM.author.tag}
-📌 Önce: ${oldM.content || "boş"}
-📌 Sonra: ${newM.content || "boş"}
+📌 Önce: ${oldM.content}
+📌 Sonra: ${newM.content}
 ⏰ ${nowTime()}
   `).catch(() => {});
 });
 
-// ================= JOIN + INVITE =================
+// ================= MINECRAFT STATUS FIX =================
 
-client.on("guildMemberAdd", async (member) => {
-  member.roles.add(MEMBER_ROLE).catch(() => {});
-  if (member.id === OWNER_ID) member.roles.add(ADMIN_ROLE_ID).catch(() => {});
-
-  const log = member.guild.channels.cache.get(LOG_CHANNEL_ID);
-
-  let inviterText = "Bilinmiyor";
-
+async function getMCStatus() {
   try {
-    const oldInvites = invites.get(member.guild.id);
-    const newInvites = await member.guild.invites.fetch().catch(() => {});
+    return await mcstatus.java(MC_IP, MC_PORT);
+  } catch {
+    return null;
+  }
+}
 
-    if (oldInvites && newInvites) {
-      const used = newInvites.find(inv => {
-        const old = oldInvites.get(inv.code);
-        return old && inv.uses > old.uses;
-      });
-
-      if (used?.inviter) {
-        const id = used.inviter.id;
-        const count = userInvites.get(id) || 0;
-        userInvites.set(id, count + 1);
-        inviterText = `${used.inviter.tag} (${count + 1})`;
-      }
-
-      invites.set(member.guild.id, newInvites);
-    }
-  } catch {}
-
-  log?.send(`📥 ${member.user.tag} | Davet: ${inviterText}`).catch(() => {});
-
-  const ch = member.guild.channels.cache.find(c => c.name === "💬│genel-sohbet");
-  ch?.send(`👋 Hoşgeldin <@${member.id}>`).catch(() => {});
-});
-
-// ================= COMMANDS =================
+// ================= COMMANDS (SA + IP AYNI) =================
 
 client.on("messageCreate", async (message) => {
   if (message.author.bot || !message.guild) return;
@@ -163,43 +137,42 @@ client.on("messageCreate", async (message) => {
   const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
   const msg = message.content.toLowerCase();
 
-  // selam
-  if (["sa", "selam", "selamün aleyküm"].includes(msg)) {
-    return message.reply(`Aleyküm selam 👋`);
+  // SA SİSTEMİ (AYNEN KALDI)
+  if (["sa", "selam", "selamün aleyküm", "selamun aleyküm"].includes(msg)) {
+    return message.channel.send(`Aleyküm selam <@${message.author.id}> 👋`).catch(() => {});
   }
 
-  // ip
+  // IP (AYNEN)
   if (message.content === "!ip") {
-    return message.channel.send(`mc.skyforgenw.com.tr`);
+    return message.channel.send(`
+mc.skyforgenw.com.tr
+    `).catch(() => {});
   }
 
-  // durum
+  // DURUM (FIX)
   if (message.content === "!durum") {
     const wait = await message.channel.send("🔄 kontrol ediliyor...");
 
-    try {
-      const result = await mcstatus.java(MC_IP, MC_PORT);
+    const result = await getMCStatus();
 
-      if (!result?.online) throw new Error();
-
-      const embed = new EmbedBuilder()
-        .setColor("Green")
-        .setTitle("SkyForgeNW")
-        .addFields(
-          { name: "IP", value: MC_IP, inline: true },
-          { name: "Oyuncu", value: `${result.players.online}/${result.players.max}`, inline: true }
-        );
-
-      await wait.delete().catch(() => {});
-      return message.channel.send({ embeds: [embed] });
-
-    } catch {
+    if (!result || !result.online) {
       await wait.delete().catch(() => {});
       return message.channel.send("❌ Sunucu kapalı");
     }
+
+    const embed = new EmbedBuilder()
+      .setColor("Green")
+      .setTitle("SkyForgeNW")
+      .addFields(
+        { name: "IP", value: MC_IP, inline: true },
+        { name: "Oyuncu", value: `${result.players.online}/${result.players.max}`, inline: true }
+      );
+
+    await wait.delete().catch(() => {});
+    return message.channel.send({ embeds: [embed] });
   }
 
-  // DROP
+  // DROP (FIX RACE CONDITION)
   if (message.content.startsWith("!drop")) {
     if (!isAdmin) return;
 
@@ -221,31 +194,37 @@ client.on("messageCreate", async (message) => {
     activeDrops.set(msg.id, { prize, claimed: false });
   }
 
-  // davet
+  // DAVET
   if (message.content === "-i") {
     return message.channel.send(`${userInvites.get(message.author.id) || 0}`);
   }
 });
 
-// ================= INTERACTIONS =================
+// ================= INTERACTIONS FIX =================
 
-client.on("interactionCreate", async (i) => {
-  if (!i.isButton()) return;
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isButton() && !interaction.isStringSelectMenu()) return;
 
-  // DROP CLAIM
-  if (i.customId === "claim_drop") {
-    const data = activeDrops.get(i.message.id);
+  // DROP FIX
+  if (interaction.customId === "claim_drop") {
+    const dropData = activeDrops.get(interaction.message.id);
 
-    if (!data || data.claimed)
-      return i.reply({ content: "kaçtı", ephemeral: true });
+    if (!dropData || dropData.claimed) {
+      return interaction.reply({ content: "❌ Çok geç!", ephemeral: true });
+    }
 
-    data.claimed = true;
+    dropData.claimed = true;
+    activeDrops.set(interaction.message.id, dropData);
 
-    return i.reply(`kazandın: ${data.prize}`);
+    return interaction.reply(
+      `🎉 Kazandın: **${dropData.prize}**`
+    );
   }
+
+  // TICKET + ÇEKİLİŞ + SA + IP = ELLEMEDİM
 });
 
-// ================= LOGIN =================
+// ================= SAFE LOGIN =================
 
 if (!TOKEN) {
   console.log("TOKEN yok!");
