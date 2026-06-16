@@ -1,4 +1,4 @@
-const {
+Const {
   Client,
   GatewayIntentBits,
   Partials,
@@ -6,12 +6,8 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  StringSelectMenuBuilder,
-  AuditLogEvent,
-  EmbedBuilder
+  StringSelectMenuBuilder
 } = require("discord.js");
-
-const mcstatus = require("node-mcstatus");
 
 // ================= CLIENT =================
 
@@ -20,23 +16,22 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildInvites
+    GatewayIntentBits.GuildMembers
   ],
-  partials: [Partials.Message, Partials.Channel, Partials.GuildMember]
+  partials: [
+    Partials.Message,
+    Partials.Channel,
+    Partials.GuildMember
+  ]
 });
 
 // ================= CONFIG =================
 
 const TOKEN = process.env.TOKEN;
 const MEMBER_ROLE = process.env.MEMBER_ROLE;
-const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
 
 const OWNER_ID = "1003708560728920165";
 const ADMIN_ROLE_ID = "1506368461964705924";
-
-const MC_IP = "mc.skyforgenw.com.tr";
-const MC_PORT = 25565;
 
 // ================= DATA =================
 
@@ -44,7 +39,6 @@ const giveaways = {};
 const activeTickets = new Map();
 const invites = new Map();
 const userInvites = new Map();
-const activeDrops = new Map();
 
 // ================= TIME =================
 
@@ -66,13 +60,13 @@ client.once("ready", async () => {
 
   client.guilds.cache.forEach(async (guild) => {
     const inv = await guild.invites.fetch().catch(() => {});
-    if (inv) invites.set(guild.id, inv);
+    invites.set(guild.id, inv);
   });
 });
 
-// ================= LOG FIX =================
+// ================= LOG SYSTEM =================
 
-// MESAJ SİLME (FIX)
+// MESAJ SİLME
 client.on("messageDelete", async (message) => {
   if (!message.guild) return;
 
@@ -82,156 +76,257 @@ client.on("messageDelete", async (message) => {
   let executor = "Bilinmiyor";
 
   try {
-    const audit = await message.guild.fetchAuditLogs({
-      limit: 1,
-      type: AuditLogEvent.MessageDelete
-    });
-
+    const audit = await message.guild.fetchAuditLogs({ limit: 1, type: 72 });
     const entry = audit.entries.first();
-    if (entry) executor = entry.executor?.tag || "Bilinmiyor";
+    if (entry) executor = entry.executor.tag;
   } catch {}
 
   log.send(`
-🗑 MESAJ SİLİNDİ
+🗑️ MESAJ SİLİNDİ
 👤 Yazan: ${message.author?.tag || "Bilinmiyor"}
 🧨 Silen: ${executor}
 💬 İçerik: ${message.content || "boş"}
 ⏰ ${nowTime()}
-  `).catch(() => {});
+  `);
 });
 
-// MESAJ DÜZENLEME (FIX)
+// MESAJ EDİT
 client.on("messageUpdate", async (oldM, newM) => {
   if (!oldM.guild) return;
-  if (!oldM.author || oldM.author.bot) return;
-  if (!oldM.content || !newM.content) return;
   if (oldM.content === newM.content) return;
 
   const log = oldM.guild.channels.cache.get(LOG_CHANNEL_ID);
   if (!log) return;
 
   log.send(`
-✏ MESAJ DÜZENLENDİ
-👤 Kullanıcı: ${oldM.author.tag}
-📌 Önce: ${oldM.content}
-📌 Sonra: ${newM.content}
+✏️ MESAJ DÜZENLENDİ
+👤 ${oldM.author?.tag || "Bilinmiyor"}
+📌 ÖNCE: ${oldM.content || "boş"}
+📌 SONRA: ${newM.content || "boş"}
 ⏰ ${nowTime()}
-  `).catch(() => {});
+  `);
 });
 
-// ================= MINECRAFT STATUS FIX =================
+// ================= JOIN =================
 
-async function getMCStatus() {
-  try {
-    return await mcstatus.java(MC_IP, MC_PORT);
-  } catch {
-    return null;
+client.on("guildMemberAdd", async (member) => {
+
+  member.roles.add(MEMBER_ROLE).catch(() => {});
+
+  if (member.id === OWNER_ID) {
+    member.roles.add(ADMIN_ROLE_ID).catch(() => {});
   }
-}
 
-// ================= COMMANDS (SA + IP AYNI) =================
+  const log = member.guild.channels.cache.get(LOG_CHANNEL_ID);
+  if (log) {
+    log.send(`📥 GİRİŞ: ${member.user.tag} | ${nowTime()}`);
+  }
+
+  const channel = member.guild.channels.cache.find(c => c.name === "💬│genel-sohbet");
+  if (channel) channel.send(`👋 Hoşgeldin <@${member.id}>`);
+});
+
+// ================= MESSAGE =================
 
 client.on("messageCreate", async (message) => {
+
   if (message.author.bot || !message.guild) return;
 
-  const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
+  const isAdmin =
+    message.member.permissions.has(PermissionsBitField.Flags.Administrator);
+
   const msg = message.content.toLowerCase();
 
-  // SA SİSTEMİ (AYNEN KALDI)
-  if (["sa", "selam", "selamün aleyküm", "selamun aleyküm"].includes(msg)) {
-    return message.channel.send(`Aleyküm selam <@${message.author.id}> 👋`).catch(() => {});
+  // SELAM
+  if (["sa","selam","selamün aleyküm","selamun aleyküm"].includes(msg)) {
+    return message.channel.send(
+      `Aleyküm selam <@${message.author.id}>, hoşgeldin 👋`
+    );
   }
 
-  // IP (AYNEN)
+  // IP
   if (message.content === "!ip") {
     return message.channel.send(`
+Java
+Sürüm: 1.9 - 1.21.x
 mc.skyforgenw.com.tr
-    `).catch(() => {});
+
+Bedrock
+Port: 19132
+mc.skyforgenw.com.tr
+    `);
   }
 
-  // DURUM (FIX)
-  if (message.content === "!durum") {
-    const wait = await message.channel.send("🔄 kontrol ediliyor...");
-
-    const result = await getMCStatus();
-
-    if (!result || !result.online) {
-      await wait.delete().catch(() => {});
-      return message.channel.send("❌ Sunucu kapalı");
-    }
-
-    const embed = new EmbedBuilder()
-      .setColor("Green")
-      .setTitle("SkyForgeNW")
-      .addFields(
-        { name: "IP", value: MC_IP, inline: true },
-        { name: "Oyuncu", value: `${result.players.online}/${result.players.max}`, inline: true }
-      );
-
-    await wait.delete().catch(() => {});
-    return message.channel.send({ embeds: [embed] });
+  // -i
+  if (message.content === "-i") {
+    const count = userInvites.get(message.author.id) || 0;
+    return message.channel.send(`📨 Davet sayın: **${count}**`);
   }
 
-  // DROP (FIX RACE CONDITION)
-  if (message.content.startsWith("!drop")) {
+  // TICKET PANEL
+  if (message.content === "!ticketpanel") {
+
     if (!isAdmin) return;
-
-    const prize = message.content.split(" ").slice(1).join(" ");
-    if (!prize) return message.reply("!drop ödül");
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId("claim_drop")
-        .setLabel("Kazan")
-        .setStyle(ButtonStyle.Primary)
+        .setCustomId("ticket_open_menu")
+        .setLabel("🎫 Ticket Aç")
+        .setStyle(ButtonStyle.Success)
     );
 
-    const msg = await message.channel.send({
-      content: "DROP BAŞLADI",
+    return message.channel.send({
+      content: "🎫 Ticket sistemi aktif",
+      components: [row]
+    });
+  }
+
+  // GIVEAWAY
+  if (message.content.startsWith("!cekilis")) {
+
+    if (!isAdmin) return;
+
+    const args = message.content.split(" ");
+    const time = args[1];
+    const prize = args.slice(2).join(" ");
+
+    let ms = 0;
+    if (time.endsWith("m")) ms = parseInt(time) * 60000;
+    if (time.endsWith("h")) ms = parseInt(time) * 3600000;
+    if (time.endsWith("d")) ms = parseInt(time) * 86400000;
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("join_giveaway")
+        .setLabel("🎉 Katıl")
+        .setStyle(ButtonStyle.Success)
+    );
+
+    const msgGiveaway = await message.channel.send({
+      content: `🎉 ÇEKİLİŞ\n🎁 ${prize}\n⏰ ${time}`,
       components: [row]
     });
 
-    activeDrops.set(msg.id, { prize, claimed: false });
-  }
+    giveaways[msgGiveaway.id] = [];
 
-  // DAVET
-  if (message.content === "-i") {
-    return message.channel.send(`${userInvites.get(message.author.id) || 0}`);
+    setTimeout(() => {
+
+      const users = giveaways[msgGiveaway.id];
+
+      if (!users || users.length === 0)
+        return message.channel.send("❌ kimse katılmadı");
+
+      const winner =
+        users[Math.floor(Math.random() * users.length)];
+
+      message.channel.send(`🏆 Kazanan: <@${winner}>`);
+
+      delete giveaways[msgGiveaway.id];
+
+    }, ms);
   }
 });
 
-// ================= INTERACTIONS FIX =================
+// ================= INTERACTIONS =================
 
 client.on("interactionCreate", async (interaction) => {
+
   if (!interaction.isButton() && !interaction.isStringSelectMenu()) return;
 
-  // DROP FIX
-  if (interaction.customId === "claim_drop") {
-    const dropData = activeDrops.get(interaction.message.id);
+  // MENU
+  if (interaction.customId === "ticket_open_menu") {
 
-    if (!dropData || dropData.claimed) {
-      return interaction.reply({ content: "❌ Çok geç!", ephemeral: true });
-    }
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId("ticket_category")
+      .setPlaceholder("Kategori seç")
+      .addOptions(
+        { label: "Destek", value: "destek" },
+        { label: "Bug", value: "bug" },
+        { label: "Şikayet", value: "sikayet" },
+        { label: "Diğer", value: "diger" }
+      );
 
-    dropData.claimed = true;
-    activeDrops.set(interaction.message.id, dropData);
-
-    return interaction.reply(
-      `🎉 Kazandın: **${dropData.prize}**`
-    );
+    return interaction.reply({
+      content: "Kategori seç",
+      components: [new ActionRowBuilder().addComponents(menu)],
+      ephemeral: true
+    });
   }
 
-  // TICKET + ÇEKİLİŞ + SA + IP = ELLEMEDİM
+  // GIVEAWAY JOIN
+  if (interaction.customId === "join_giveaway") {
+
+    const users = giveaways[interaction.message.id];
+
+    if (!users)
+      return interaction.reply({ content: "bitti", ephemeral: true });
+
+    if (users.includes(interaction.user.id))
+      return interaction.reply({ content: "zaten katıldın", ephemeral: true });
+
+    users.push(interaction.user.id);
+
+    return interaction.reply({ content: "katıldın", ephemeral: true });
+  }
+
+  // TICKET CREATE
+  if (interaction.customId === "ticket_category") {
+
+    const category = interaction.values[0];
+    const userId = interaction.user.id;
+
+    if (activeTickets.has(userId)) {
+      return interaction.reply({
+        content: "❌ Zaten ticketin var",
+        ephemeral: true
+      });
+    }
+
+    const channel = await interaction.guild.channels.create({
+      name: `ticket-${category}-${interaction.user.username}`,
+      type: 0,
+      permissionOverwrites: [
+        { id: interaction.guild.id, deny: ["ViewChannel"] },
+        { id: userId, allow: ["ViewChannel","SendMessages","ReadMessageHistory"] }
+      ]
+    });
+
+    activeTickets.set(userId, channel.id);
+
+    await channel.send({
+      content: `🎫 Ticket Açıldı\n📂 ${category}`,
+      components: [
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId("ticket_close")
+            .setLabel("Kapat")
+            .setStyle(ButtonStyle.Danger)
+        )
+      ]
+    });
+
+    return interaction.reply({
+      content: `ticket açıldı ${channel}`,
+      ephemeral: true
+    });
+  }
+
+  // CLOSE
+  if (interaction.customId === "ticket_close") {
+
+    const owner = [...activeTickets.entries()]
+      .find(x => x[1] === interaction.channel.id);
+
+    if (owner) activeTickets.delete(owner[0]);
+
+    await interaction.reply("kapatılıyor...");
+
+    setTimeout(() => {
+      interaction.channel.delete().catch(() => {});
+    }, 2000);
+  }
 });
 
-// ================= SAFE LOGIN =================
-
-if (!TOKEN) {
-  console.log("TOKEN yok!");
-  process.exit(1);
-}
-
-process.on("unhandledRejection", console.log);
-process.on("uncaughtException", console.log);
+// ================= LOGIN =================
 
 client.login(TOKEN);
