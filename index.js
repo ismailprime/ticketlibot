@@ -42,6 +42,12 @@ const activeTickets = new Map();
 const invites = new Map();
 const userInvites = new Map();
 
+// ================= DROP SYSTEM =================
+
+let dropActive = false;
+let dropClaimed = false;
+let dropMessageId = null;
+
 // ================= TIME =================
 
 function nowTime() {
@@ -229,6 +235,40 @@ mc.skyforgenw.com.tr
   }
 });
 
+// ================= DROP COMMAND =================
+
+  if (message.content.startsWith("!drop")) {
+
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
+
+    if (dropActive) {
+      return message.reply("❌ Zaten aktif drop var!");
+    }
+
+    const prize = message.content.split(" ").slice(1).join(" ");
+
+    if (!prize) {
+      return message.reply("❌ Kullanım: !drop 7 günlük VIP");
+    }
+
+    dropActive = true;
+    dropClaimed = false;
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("drop_claim")
+        .setLabel("🎁 Ödülü Kap!")
+        .setStyle(ButtonStyle.Success)
+    );
+
+    const msg = await message.channel.send({
+      content: `🎉 **DROP BAŞLADI!**\n🎁 Ödül: **${prize}**`,
+      components: [row]
+    });
+
+    dropMessageId = msg.id;
+  }
+
 // ================= INTERACTIONS =================
 
 client.on("interactionCreate", async (interaction) => {
@@ -328,6 +368,32 @@ client.on("interactionCreate", async (interaction) => {
     }, 2000);
   }
 });
+
+
+// ================= DROP CLAIM =================
+
+  if (interaction.customId === "drop_claim") {
+
+    if (!dropActive || dropClaimed) {
+      return interaction.reply({
+        content: "❌ Drop bitmiş!",
+        ephemeral: true
+      });
+    }
+
+    dropActive = false;
+    dropClaimed = true;
+
+    await interaction.update({
+      content: `🏆 Kazanan: <@${interaction.user.id}>`,
+      components: []
+    });
+
+    return interaction.channel.send(
+      `🎊 <@${interaction.user.id}> ödülü kazandı! Ticket açabilir.`
+    );
+  }
+
 
 // ================= LOGIN =================
 
