@@ -33,7 +33,6 @@ const MEMBER_ROLE = process.env.MEMBER_ROLE;
 const OWNER_ID = "1003708560728920165";
 const ADMIN_ROLE_ID = "1506368461964705924";
 
-// ✅ LOG KANALI SABİT
 const LOG_CHANNEL_ID = "1512629605830496257";
 
 // ================= DATA =================
@@ -42,6 +41,9 @@ const giveaways = {};
 const activeTickets = new Map();
 const invites = new Map();
 const userInvites = new Map();
+
+// 🎁 DROP SYSTEM STATE
+let dropActive = false;
 
 // ================= TIME =================
 
@@ -67,7 +69,7 @@ client.once("ready", async () => {
   });
 });
 
-// ================= PRO LOG SYSTEM =================
+// ================= LOG SYSTEM =================
 
 // MESAJ SİLME
 client.on("messageDelete", async (message) => {
@@ -110,7 +112,7 @@ client.on("messageUpdate", async (oldM, newM) => {
   );
 });
 
-// ÜYE GİRİŞ + ROL
+// ÜYE GİRİŞ
 client.on("guildMemberAdd", async (member) => {
 
   member.roles.add(MEMBER_ROLE).catch(()=>{});
@@ -139,39 +141,18 @@ client.on("messageCreate", async (message) => {
 
   const msg = message.content.toLowerCase();
 
-  // ================= SELAM =================
-
+  // SELAM
   if (["sa","selam","selamün aleyküm","selamun aleyküm"].includes(msg)) {
-    return message.channel.send(
-      `Aleyküm selam <@${message.author.id}>, hoşgeldin 👋 Biz de seni bekliyorduk.`
-    );
+    return message.channel.send(`Aleyküm selam <@${message.author.id}> 👋`);
   }
 
-  // ================= IP =================
-
+  // IP
   if (message.content === "!ip") {
-    return message.channel.send(
-`**Java**
-Sürüm: 1.9 - 1.21.x
-mc.skyforgenw.com.tr
-
-**Bedrock**
-Port: 19132
-mc.skyforgenw.com.tr`
-    );
+    return message.channel.send(`mc.skyforgenw.com.tr`);
   }
 
-  // ================= -i =================
-
-  if (message.content === "-i") {
-    const count = userInvites.get(message.author.id) || 0;
-    return message.channel.send(`📨 Davet sayın: **${count}**`);
-  }
-
-  // ================= TICKET PANEL =================
-
+  // TICKET PANEL
   if (message.content === "!ticketpanel") {
-
     if (!isAdmin) return;
 
     const row = new ActionRowBuilder().addComponents(
@@ -187,8 +168,7 @@ mc.skyforgenw.com.tr`
     });
   }
 
-  // ================= GIVEAWAY =================
-
+  // GIVEAWAY
   if (message.content.startsWith("!cekilis")) {
 
     if (!isAdmin) return;
@@ -232,6 +212,37 @@ mc.skyforgenw.com.tr`
 
     }, ms);
   }
+
+  // ================= DROP SYSTEM =================
+
+  if (message.content.startsWith("!drop")) {
+
+    if (!isAdmin) return;
+
+    if (dropActive) {
+      return message.reply("❌ Zaten aktif bir drop var!");
+    }
+
+    const prize = message.content.split(" ").slice(1).join(" ");
+
+    if (!prize) {
+      return message.reply("❌ Örnek: !drop 7 günlük VIP");
+    }
+
+    dropActive = true;
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("drop_claim")
+        .setLabel("🎁 Ödülü Kap!")
+        .setStyle(ButtonStyle.Success)
+    );
+
+    return message.channel.send({
+      content: `🎉 DROP BAŞLADI!\n🎁 Ödül: ${prize}`,
+      components: [row]
+    });
+  }
 });
 
 // ================= INTERACTIONS =================
@@ -240,7 +251,31 @@ client.on("interactionCreate", async (interaction) => {
 
   if (!interaction.isButton() && !interaction.isStringSelectMenu()) return;
 
-  // MENU
+  // DROP CLAIM
+  if (interaction.customId === "drop_claim") {
+
+    if (!dropActive) {
+      return interaction.reply({
+        content: "❌ Drop bitmiş!",
+        ephemeral: true
+      });
+    }
+
+    dropActive = false;
+
+    const user = interaction.user;
+
+    await interaction.update({
+      content: `🏆 Kazanan: <@${user.id}>`,
+      components: []
+    });
+
+    return interaction.channel.send(
+      `🎊 <@${user.id}> ödülü kazandın! Lütfen ticket aç.`
+    );
+  }
+
+  // TICKET MENU
   if (interaction.customId === "ticket_open_menu") {
 
     const menu = new StringSelectMenuBuilder()
