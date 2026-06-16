@@ -20,7 +20,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildInvites // Davet takibi için kritik
+    GatewayIntentBits.GuildInvites
   ],
   partials: [
     Partials.Message,
@@ -48,7 +48,7 @@ const giveaways = {};
 const activeTickets = new Map();
 const invites = new Map();
 const userInvites = new Map();
-const activeDrops = new Map(); // Drop sistemi için
+const activeDrops = new Map();
 
 // ================= ZAMAN FONKSİYONU =================
 
@@ -68,7 +68,6 @@ function nowTime() {
 client.once("ready", async () => {
   console.log(`${client.user.tag} aktif!`);
 
-  // Mevcut davetleri hafızaya al
   client.guilds.cache.forEach(async (guild) => {
     const inv = await guild.invites.fetch().catch(() => {});
     if (inv) invites.set(guild.id, inv);
@@ -123,13 +122,12 @@ client.on("messageUpdate", async (oldM, newM) => {
 // ================= GİRİŞ VE DAVET SİSTEMİ =================
 
 client.on("guildMemberAdd", async (member) => {
-  // Rol Tanımlamaları
+  // Güvenli Rol Verme (Catch Eklendi)
   member.roles.add(MEMBER_ROLE).catch(() => {});
   if (member.id === OWNER_ID) {
     member.roles.add(ADMIN_ROLE_ID).catch(() => {});
   }
 
-  // Davet Takibi Hesabı
   let inviterText = "Bilinmiyor";
   try {
     const cachedInvites = invites.get(member.guild.id);
@@ -154,18 +152,15 @@ client.on("guildMemberAdd", async (member) => {
     console.error("Davet hesaplama hatası:", err);
   }
 
-  // Giriş Log Kanalı Bildirimi
   const log = member.guild.channels.cache.get(LOG_CHANNEL_ID);
   if (log) {
     log.send(`📥 *GİRİŞ:* ${member.user.tag} | *Davet Eden:* ${inviterText} | ⏰ ${nowTime()}`).catch(() => {});
   }
 
-  // Hoş Geldin Mesajı
   const channel = member.guild.channels.cache.find(c => c.name === "💬│genel-sohbet");
   if (channel) channel.send(`👋 Hoşgeldin <@${member.id}>`).catch(() => {});
 });
 
-// Yeni davet açıldığında listeyi tazele
 client.on("inviteCreate", async (invite) => {
   const inv = await invite.guild.invites.fetch().catch(() => {});
   if (inv) invites.set(invite.guild.id, inv);
@@ -181,7 +176,7 @@ client.on("messageCreate", async (message) => {
 
   // 1. SELAMLAŞMA
   if (["sa","selam","selamün aleyküm","selamun aleyküm"].includes(msg)) {
-    return message.channel.send(`Aleyküm selam <@${message.author.id}>, hoşgeldin 👋`);
+    return message.channel.send(`Aleyküm selam <@${message.author.id}>, hoşgeldin 👋`).catch(() => {});
   }
 
   // 2. IP BİLGİSİ
@@ -192,15 +187,16 @@ client.on("messageCreate", async (message) => {
 
 **Bedrock Port:** 19132
 \`mc.skyforgenw.com.tr\`
-    `);
+    `).catch(() => {});
   }
 
-  // 3. MINECRAFT SUNUCU DURUMU
+  // 3. MINECRAFT SUNUCU DURUMU (Hata Düzeltildi: mcstatus.java kullanımı)
   if (message.content === "!durum") {
-    const waitMsg = await message.channel.send("🔄 Sunucu durumu kontrol ediliyor, lütfen bekleyin...");
+    const waitMsg = await message.channel.send("🔄 Sunucu durumu kontrol ediliyor, lütfen bekleyin...").catch(() => {});
 
     try {
-      const result = await mcstatus.statusJava(MC_IP, MC_PORT);
+      // Güncel kütüphane fonksiyonu 'java' olarak değiştirildi
+      const result = await mcstatus.java(MC_IP, MC_PORT);
 
       if (result && result.online) {
         const statusEmbed = new EmbedBuilder()
@@ -216,7 +212,7 @@ client.on("messageCreate", async (message) => {
           .setThumbnail(message.guild.iconURL({ dynamic: true }))
           .setFooter({ text: `Sorgulayan: ${message.author.tag} | ${nowTime()}` });
 
-        await waitMsg.delete().catch(() => {});
+        if (waitMsg) await waitMsg.delete().catch(() => {});
         return message.channel.send({ embeds: [statusEmbed] });
       } else {
         throw new Error("Sunucu kapalı");
@@ -229,7 +225,7 @@ client.on("messageCreate", async (message) => {
         .addFields({ name: "📶 Sunucu Adresi", value: `\`${MC_IP}\`` })
         .setFooter({ text: `${nowTime()}` });
 
-      await waitMsg.delete().catch(() => {});
+      if (waitMsg) await waitMsg.delete().catch(() => {});
       return message.channel.send({ embeds: [errorEmbed] });
     }
   }
@@ -241,7 +237,7 @@ client.on("messageCreate", async (message) => {
     const args = message.content.split(" ");
     const prize = args.slice(1).join(" ");
 
-    if (!prize) return message.reply("❌ Doğru kullanım: `!drop Ödül İçeriği` \nÖrn: `!drop 1 Aylık VIP Üyelik + 50.000 Oyun Parası`");
+    if (!prize) return message.reply("❌ Doğru kullanım: `!drop Ödül İçeriği` \nÖrn: `!drop 1 Aylık VIP Üyelik + 50.000 Oyun Parası`").catch(() => {});
 
     const dropEmbed = new EmbedBuilder()
       .setColor("#FFAA00")
@@ -260,15 +256,17 @@ client.on("messageCreate", async (message) => {
       content: "📢 @everyone @here sunucuda hızlı drop başladı, butona ilk basan ödülü kapıyor!",
       embeds: [dropEmbed],
       components: [row]
-    });
+    }).catch(() => {});
 
-    activeDrops.set(dropMessage.id, { prize: prize, claimed: false });
+    if (dropMessage) {
+      activeDrops.set(dropMessage.id, { prize: prize, claimed: false });
+    }
   }
 
   // 5. DAVET SORGULAMA
   if (message.content === "-i") {
     const count = userInvites.get(message.author.id) || 0;
-    return message.channel.send(`📨 Davet sayın: **${count}**`);
+    return message.channel.send(`📨 Davet sayın: **${count}**`).catch(() => {});
   }
 
   // 6. TICKET PANEL KURULUMU
@@ -285,7 +283,7 @@ client.on("messageCreate", async (message) => {
     return message.channel.send({
       content: "🎫 **Ticket sistemi aktif! Destek talebi oluşturmak için aşağıdaki butona tıklayın.**",
       components: [row]
-    });
+    }).catch(() => {});
   }
 
   // 7. Gelişmiş ÇEKİLİŞ SİSTEMİ
@@ -296,14 +294,14 @@ client.on("messageCreate", async (message) => {
     const time = args[1];
     const prize = args.slice(2).join(" ");
 
-    if (!time || !prize) return message.reply("❌ Doğru kullanım: `!cekilis 10m Ödül İsmi` (m: dakika, h: saat, d: gün)");
+    if (!time || !prize) return message.reply("❌ Doğru kullanım: `!cekilis 10m Ödül İsmi` (m: dakika, h: saat, d: gün)").catch(() => {});
 
     let ms = 0;
     const timeNum = parseInt(time);
     if (time.endsWith("m")) ms = timeNum * 60000;
     else if (time.endsWith("h")) ms = timeNum * 3600000;
     else if (time.endsWith("d")) ms = timeNum * 86400000;
-    else return message.reply("❌ Geçersiz süre formatı! Örn: `5m`, `2h`, `1d`");
+    else return message.reply("❌ Geçersiz süre formatı! Örn: `5m`, `2h`, `1d`").catch(() => {});
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -315,8 +313,9 @@ client.on("messageCreate", async (message) => {
     const msgGiveaway = await message.channel.send({
       content: `🎉 **ÇEKİLİŞ BAŞLADI** 🎉\n\n🎁 **Ödül:** ${prize}\n⏰ **Süre:** ${time}\n\nKatılmak için aşağıdaki butona tıklayın!`,
       components: [row]
-    });
+    }).catch(() => {});
 
+    if (!msgGiveaway) return;
     giveaways[msgGiveaway.id] = [];
 
     setTimeout(async () => {
@@ -324,8 +323,8 @@ client.on("messageCreate", async (message) => {
       const users = giveaways[msgGiveaway.id];
 
       if (!users || users.length === 0) {
-        if (fetchedMsg) fetchedMsg.edit({ content: "❌ Çekiliş iptal edildi, kimse katılmadı.", components: [] });
-        return message.channel.send("❌ Çekilişe kimse katılmadığı için kazanan seçilemedi.");
+        if (fetchedMsg) fetchedMsg.edit({ content: "❌ Çekiliş iptal edildi, kimse katılmadı.", components: [] }).catch(() => {});
+        return message.channel.send("❌ Çekilişe kimse katılmadığı için kazanan seçilemedi.").catch(() => {});
       }
 
       const winner = users[Math.floor(Math.random() * users.length)];
@@ -334,7 +333,7 @@ client.on("messageCreate", async (message) => {
         fetchedMsg.edit({ content: `🎉 **ÇEKİLİŞ SONUÇLANDI** 🎉\n\n🎁 **Ödül:** ${prize}\n🏆 **Kazanan:** <@${winner}>`, components: [] }).catch(() => {});
       }
       
-      message.channel.send(`🏆 Tebrikler <@${winner}>! **${prize}** ödülünü kazandın!`);
+      message.channel.send(`🏆 Tebrikler <@${winner}>! **${prize}** ödülünü kazandın!`).catch(() => {});
       delete giveaways[msgGiveaway.id];
     }, ms);
   }
@@ -350,18 +349,16 @@ client.on("interactionCreate", async (interaction) => {
     const dropData = activeDrops.get(interaction.message.id);
 
     if (!dropData) {
-      return interaction.reply({ content: "❌ Bu drop artık aktif değil veya silinmiş.", ephemeral: true });
+      return interaction.reply({ content: "❌ Bu drop artık aktif değil veya silinmiş.", ephemeral: true }).catch(() => {});
     }
 
     if (dropData.claimed) {
-      return interaction.reply({ content: "❌ Çok geç kaldın! Ödül başka bir oyuncu tarafından kapıldı.", ephemeral: true });
+      return interaction.reply({ content: "❌ Çok geç kaldın! Ödül başka bir oyuncu tarafından kapıldı.", ephemeral: true }).catch(() => {});
     }
 
-    // İlk basanı kaydet ve kilitle
     dropData.claimed = true;
     activeDrops.set(interaction.message.id, dropData);
 
-    // Butonu Devre Dışı Bırak
     const disabledRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId("claim_drop_disabled")
@@ -370,7 +367,6 @@ client.on("interactionCreate", async (interaction) => {
         .setDisabled(true)
     );
 
-    // Kutu Tasarımını "Sona Erdi" Olarak Düzenle
     const editEmbed = EmbedBuilder.from(interaction.message.embeds[0])
       .setColor("#555555")
       .setTitle("📦 DROP SONA ERDİ")
@@ -384,10 +380,9 @@ client.on("interactionCreate", async (interaction) => {
 
     activeDrops.delete(interaction.message.id);
 
-    // Belirttiğin Kazanan Etiketli Bildirim Mesajı
     return interaction.reply({
       content: `🎉 Tebrikler <@${interaction.user.id}>! **${dropData.prize}** ödülünü ilk sen kaptın! 🎫 Ticket açarak hediyeni alabilirsin.`
-    });
+    }).catch(() => {});
   }
 
   // TICKET KATEGORİ SEÇİM PANELİNİ AÇMA
@@ -406,21 +401,21 @@ client.on("interactionCreate", async (interaction) => {
       content: "Lütfen talep açmak istediğiniz kategoriyi seçin:",
       components: [new ActionRowBuilder().addComponents(menu)],
       ephemeral: true
-    });
+    }).catch(() => {});
   }
 
   // ÇEKİLİŞE KATILMA BUTONU
   if (interaction.customId === "join_giveaway") {
     const users = giveaways[interaction.message.id];
 
-    if (!users) return interaction.reply({ content: "❌ Bu çekiliş çoktan sona ermiş.", ephemeral: true });
+    if (!users) return interaction.reply({ content: "❌ Bu çekiliş çoktan sona ermiş.", ephemeral: true }).catch(() => {});
 
     if (users.includes(interaction.user.id)) {
-      return interaction.reply({ content: "❌ Zaten bu çekilişe katılmışsın!", ephemeral: true });
+      return interaction.reply({ content: "❌ Zaten bu çekilişe katılmışsın!", ephemeral: true }).catch(() => {});
     }
 
     users.push(interaction.user.id);
-    return interaction.reply({ content: "✅ Çekilişe başarıyla katıldın! Bol şans. 🎉", ephemeral: true });
+    return interaction.reply({ content: "✅ Çekilişe başarıyla katıldın! Bol şans. 🎉", ephemeral: true }).catch(() => {});
   }
 
   // TICKET KANALI OLUŞTURMA SÜRECİ
@@ -432,17 +427,21 @@ client.on("interactionCreate", async (interaction) => {
       return interaction.reply({
         content: "❌ Zaten açık bir destek talebiniz bulunuyor!",
         ephemeral: true
-      });
+      }).catch(() => {});
     }
 
     const channel = await interaction.guild.channels.create({
       name: `ticket-${category}-${interaction.user.username}`,
-      type: 0, // GuildText
+      type: 0,
       permissionOverwrites: [
         { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
         { id: userId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] }
       ]
-    });
+    }).catch(() => null);
+
+    if (!channel) {
+      return interaction.reply({ content: "❌ Kanal oluşturulurken bir yetki hatası oluştu.", ephemeral: true }).catch(() => {});
+    }
 
     activeTickets.set(userId, channel.id);
 
@@ -456,12 +455,12 @@ client.on("interactionCreate", async (interaction) => {
             .setStyle(ButtonStyle.Danger)
         )
       ]
-    });
+    }).catch(() => {});
 
     return interaction.reply({
       content: `✅ Destek talebiniz başarıyla oluşturuldu: ${channel}`,
       ephemeral: true
-    });
+    }).catch(() => {});
   }
 
   // TICKET KAPATMA BUTONU
@@ -469,7 +468,7 @@ client.on("interactionCreate", async (interaction) => {
     const owner = [...activeTickets.entries()].find(x => x[1] === interaction.channel.id);
     if (owner) activeTickets.delete(owner[0]);
 
-    await interaction.reply("🔒 Destek kanalı 2 saniye içinde siliniyor...");
+    await interaction.reply("🔒 Destek kanalı 2 saniye içinde siliniyor...").catch(() => {});
 
     setTimeout(() => {
       interaction.channel.delete().catch(() => {});
@@ -480,4 +479,3 @@ client.on("interactionCreate", async (interaction) => {
 // ================= BOT GİRİŞİ =================
 
 client.login(TOKEN);
-                           
