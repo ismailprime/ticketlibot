@@ -32,18 +32,20 @@ const MEMBER_ROLE = process.env.MEMBER_ROLE;
 
 const OWNER_ID = "1003708560728920165";
 const ADMIN_ROLE_ID = "1506368461964705924";
-
 const LOG_CHANNEL_ID = "1512629605830496257";
 
 // ================= DATA =================
 
 const giveaways = {};
 const activeTickets = new Map();
+
+// 🔥 INVITE FIX
 const invites = new Map();
 const userInvites = new Map();
 
 // 🎁 DROP SYSTEM
 let dropActive = false;
+let dropClaimed = false;
 
 // ================= TIME =================
 
@@ -69,53 +71,59 @@ client.once("ready", async () => {
   });
 });
 
-// ================= LOG SYSTEM =================
+// ================= INVITE FIX =================
 
-client.on("messageDelete", async (message) => {
-  if (!message.guild) return;
+client.on("guildMemberAdd", async (member) => {
+  member.roles.add(MEMBER_ROLE).catch(() => {});
 
-  const log = message.guild.channels.cache.get(LOG_CHANNEL_ID);
-  if (!log) return;
+  const log = member.guild.channels.cache.get(LOG_CHANNEL_ID);
+  if (log) log.send(`📥 GİRİŞ: ${member.user.tag}`);
 
-  let executor = "Bilinmiyor";
+  const channel = member.guild.channels.cache.find(c => c.name === "💬│genel-sohbet");
+  if (channel) channel.send(`👋 Hoşgeldin <@${member.id}>`);
 
-  try {
-    const audit = await message.guild.fetchAuditLogs({ limit: 1, type: 72 });
-    const entry = audit.entries.first();
-    if (entry) executor = entry.executor.tag;
-  } catch {}
+  // invite update (basit fix)
+  const cachedInvites = invites.get(member.guild.id);
+  const newInvites = await member.guild.invites.fetch().catch(() => {});
+  invites.set(member.guild.id, newInvites);
 
-  log.send(`
-🗑️ MESAJ SİLİNDİ
-👤 Yazan: ${message.author?.tag || "Bilinmiyor"}
-🧨 Silen: ${executor}
-💬 İçerik: ${message.content || "boş"}
-⏰ ${nowTime()}
-  `);
+  for (const inv of newInvites.values()) {
+    const old = cachedInvites?.find(i => i.code === inv.code);
+    if (old && old.uses < inv.uses) {
+      const count = userInvites.get(inv.inviter?.id) || 0;
+      userInvites.set(inv.inviter?.id, count + 1);
+    }
+  }
 });
 
 // ================= MESSAGE =================
 
 client.on("messageCreate", async (message) => {
 
-  if (message.author.bot || !message.guild) return;
+  if (!message.guild || message.author.bot) return;
 
   const isAdmin =
     message.member.permissions.has(PermissionsBitField.Flags.Administrator);
 
   const msg = message.content.toLowerCase();
 
-  // SELAM
+  // ================= SELAM =================
   if (["sa","selam","selamün aleyküm","selamun aleyküm"].includes(msg)) {
     return message.channel.send(`Aleyküm selam <@${message.author.id}> 👋`);
   }
 
-  // IP
+  // ================= IP =================
   if (message.content === "!ip") {
     return message.channel.send(`mc.skyforgenw.com.tr`);
   }
 
-  // DROP COMMAND
+  // ================= -i FIX =================
+  if (message.content === "-i") {
+    const count = userInvites.get(message.author.id) || 0;
+    return message.channel.send(`📨 Davet sayın: **${count}**`);
+  }
+
+  // ================= DROP =================
   if (message.content.startsWith("!drop")) {
 
     if (!isAdmin) return;
@@ -125,12 +133,10 @@ client.on("messageCreate", async (message) => {
     }
 
     const prize = message.content.split(" ").slice(1).join(" ");
-
-    if (!prize) {
-      return message.reply("❌ Örnek: !drop 7 günlük VIP");
-    }
+    if (!prize) return message.reply("❌ !drop 7 günlük VIP");
 
     dropActive = true;
+    dropClaimed = false;
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -145,7 +151,7 @@ client.on("messageCreate", async (message) => {
     });
   }
 
-  // GIVEAWAY
+  // ================= GIVEAWAY =================
   if (message.content.startsWith("!cekilis")) {
 
     if (!isAdmin) return;
@@ -194,16 +200,17 @@ client.on("interactionCreate", async (interaction) => {
 
   if (!interaction.isButton() && !interaction.isStringSelectMenu()) return;
 
-  // DROP CLAIM
+  // ================= DROP CLAIM (FIXED) =================
   if (interaction.customId === "drop_claim") {
 
-    if (!dropActive) {
+    if (!dropActive || dropClaimed) {
       return interaction.reply({
         content: "❌ Drop bitmiş!",
         ephemeral: true
       });
     }
 
+    dropClaimed = true;
     dropActive = false;
 
     await interaction.update({
@@ -216,7 +223,7 @@ client.on("interactionCreate", async (interaction) => {
     );
   }
 
-  // GIVEAWAY JOIN
+  // ================= GIVEAWAY =================
   if (interaction.customId === "join_giveaway") {
 
     const users = giveaways[interaction.message.id];
@@ -231,7 +238,6 @@ client.on("interactionCreate", async (interaction) => {
 
     return interaction.reply({ content: "katıldın", ephemeral: true });
   }
-
 });
 
 client.login(TOKEN);
